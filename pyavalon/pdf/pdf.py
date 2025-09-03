@@ -1,4 +1,3 @@
-from fpdf import FPDF
 from weasyprint import HTML
 import os
 

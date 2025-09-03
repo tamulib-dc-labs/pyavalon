@@ -1,1 +1,1 @@
-from .avalon import AvalonMediaObject, AvalonCollection, AvalonSupplementalFile
+from .avalon import AvalonMediaObject as AvalonMediaObject, AvalonCollection as AvalonCollection, AvalonSupplementalFile as AvalonSupplementalFile

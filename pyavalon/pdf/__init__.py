@@ -1,1 +1,1 @@
-from .pdf import HTMLPDFBuilder
+from .pdf import HTMLPDFBuilder as HTMLPDFBuilder

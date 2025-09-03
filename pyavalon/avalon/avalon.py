@@ -241,8 +241,6 @@ class AvalonSupplementalFile(AvalonBase):
             json.dump(response, my_file, indent=4)
 
     def add_suppl_filename(self, identifier, filename, metadata=None):
-        if metadata is None:
-            json={"label": filename}
         url = f"{self.base}/master_files/{self.fedora_id}/supplemental_files/{identifier}.json"
         
         headers = self.headers.copy()
@@ -250,7 +248,7 @@ class AvalonSupplementalFile(AvalonBase):
         
         response = requests.put(
             url,
-            json=metadata,  # Use json parameter instead of data
+            json=metadata,
             headers=headers
         )
         return response.content

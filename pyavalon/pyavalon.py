@@ -1,8 +1,8 @@
 import click
-from pyavalon import AvalonMediaObject, AvalonCollection, AvalonSupplementalFile
+from pyavalon import AvalonCollection, AvalonSupplementalFile
 from pprint import pprint
 from csv import DictWriter, DictReader
-import json
+
 
 @click.group()
 def cli() -> None:
@@ -92,7 +92,7 @@ def upload_supplemental_files(instance, csv):
                     filename=row['label']
                 )
             elif row.get('type') == "caption":
-                response = supplemental.add_caption_or_transcript(
+                supplemental.add_caption_or_transcript(
                     row['filename'], 
                     label=row['label']
                 )
@@ -102,7 +102,7 @@ def upload_supplemental_files(instance, csv):
                     type="transcript", 
                 )
             elif row.get('type') == "transcript":
-                response = supplemental.add_caption_or_transcript(
+                supplemental.add_caption_or_transcript(
                     row['filename'], 
                     type="transcript", 
                     label=row['label']
