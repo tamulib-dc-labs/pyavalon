@@ -51,10 +51,12 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv):
             final_files.append(
                 {
                     "id": file_id["id"],
-                    "label": file_id["label"]
+                    "label": file_id["label"],
+                    "parent label": v["title"], 
+                    "derivative": file_id["files"][0]["derivativeFile"]
                 }
             )
     with open(output_csv, 'w') as final_csv:
-        writer = DictWriter(final_csv, fieldnames=["id", "label"])
+        writer = DictWriter(final_csv, fieldnames=["id", "label", "parent label", "derivative"])
         writer.writeheader()
         writer.writerows(final_files)
