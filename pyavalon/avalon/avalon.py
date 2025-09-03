@@ -263,7 +263,7 @@ class AvalonSupplementalFile(AvalonBase):
         
         response = requests.put(
             url,
-            json={"treat_as_transcript": True},  # Use json parameter instead of data
+            json={"treat_as_transcript": True},
             headers=headers
         )
         print(response.status_code)
@@ -305,7 +305,7 @@ class AvalonSupplementalFile(AvalonBase):
         else:
             return self.add_supplemental_file(url, file_path, filename=filename)
         
-    def add_caption_or_transcript(self, file_path, type="caption"):
+    def add_caption_or_transcript(self, file_path, type="caption", label="Captions in English"):
         url = f"{self.base}/master_files/{self.fedora_id}/supplemental_files.json"
         try:
             if 'vtt' in file_path:
@@ -315,14 +315,14 @@ class AvalonSupplementalFile(AvalonBase):
             with open(file_path, 'rb') as file:
                 files = {
                     'file': (
-                        "Captions", 
+                        label, 
                         file, 
                         mimetype
                     )
                 }
                 data = {}
                 metadata = {
-                    "type": "caption",
+                    "type": type,
                     "label": "Captions in English",
                     "language": "English",
                     "treat_as_transcript": True,

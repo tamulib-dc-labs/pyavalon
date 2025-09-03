@@ -1,7 +1,8 @@
 import click
-from pyavalon import AvalonMediaObject, AvalonCollection
+from pyavalon import AvalonMediaObject, AvalonCollection, AvalonSupplementalFile
 from pprint import pprint
-from csv import DictWriter
+from csv import DictWriter, DictReader
+import json
 
 @click.group()
 def cli() -> None:
@@ -60,3 +61,49 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv):
         writer = DictWriter(final_csv, fieldnames=["id", "label", "parent label", "derivative"])
         writer.writeheader()
         writer.writerows(final_files)
+
+@cli.command(
+    "upload_supplemental_files", help="Upload supplemental files to Avalon based on contents of a spreadsheet"
+)
+@click.option(
+    "--instance",
+    "-i",
+    help="The Avalon Instance you want",
+    default="pre"
+)
+@click.option(
+    "--csv",
+    "-c",
+    help="The path to your CSV",
+)
+def upload_supplemental_files(instance, csv):
+    """CSV should have: id, filename, label, type"""
+    with open(csv, 'r') as my_csv:
+        reader = DictReader(my_csv)
+        for row in reader:
+            supplemental = AvalonSupplementalFile(
+                row['id'], 
+                prod_or_pre="pre"
+            )
+            if row.get('type') == 'pdf':
+                supplemental.add_pdf(
+                    row['filename'], 
+                    mime_type="application/pdf", 
+                    filename=row['label']
+                )
+            elif row.get('type') == "caption":
+                response = supplemental.add_caption_or_transcript(
+                    row['filename'], 
+                    label=row['label']
+                )
+                supplemental.add_caption_or_transcript(
+                    row['filename'], 
+                    label=f"{row['label']} - Transcripts",
+                    type="transcript", 
+                )
+            elif row.get('type') == "transcript":
+                response = supplemental.add_caption_or_transcript(
+                    row['filename'], 
+                    type="transcript", 
+                    label=row['label']
+                )
