@@ -35,8 +35,6 @@ class AvalonBase:
         response = requests.get(
             url, headers=self.headers
         )
-        print(url)
-        print(response.status_code)
         return response.json()
     
     def add_supplemental_file(self, url, file_path, filename=None):
