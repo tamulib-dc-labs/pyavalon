@@ -108,7 +108,7 @@ def upload_supplemental_files(instance, csv):
         for row in reader:
             supplemental = AvalonSupplementalFile(
                 row['id'], 
-                prod_or_pre="pre"
+                prod_or_pre=instance
             )
             if row.get('type') == 'pdf':
                 supplemental.add_pdf(

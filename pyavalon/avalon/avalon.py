@@ -291,7 +291,6 @@ class AvalonSupplementalFile(AvalonBase):
                         data=data,
                         headers=self.headers
                     )
-                print(response.json())
                 new_identifer = response.json()['id']
                 new_response = self.add_suppl_filename(new_identifer, filename)
 
