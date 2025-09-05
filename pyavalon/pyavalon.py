@@ -115,11 +115,6 @@ def upload_supplemental_files(instance, csv):
                     row['filename'], 
                     label=row['label']
                 )
-                supplemental.add_caption_or_transcript(
-                    row['filename'], 
-                    label=f"{row['label']} - Transcripts",
-                    type="transcript", 
-                )
             elif row.get('type') == "transcript":
                 supplemental.add_caption_or_transcript(
                     row['filename'], 
