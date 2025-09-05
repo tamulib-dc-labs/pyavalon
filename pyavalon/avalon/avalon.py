@@ -321,7 +321,7 @@ class AvalonSupplementalFile(AvalonBase):
                 data = {}
                 metadata = {
                     "type": type,
-                    "label": "Captions in English",
+                    "label": label,
                     "language": "English",
                     "treat_as_transcript": True,
                     "machine_generated": True,
