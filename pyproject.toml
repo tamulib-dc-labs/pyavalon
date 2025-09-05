@@ -17,6 +17,8 @@ fpdf = "^1.7.2"
 weasyprint = "^66.0"
 click = "^8.2.1"
 ruff = "^0.12.11"
+webvtt-py = "^0.5.1"
+pytest = "^8.4.2"
 
 [tool.poetry.scripts]
 pyavalon = "pyavalon.pyavalon:cli"

@@ -7,6 +7,8 @@ from subprocess import CalledProcessError
 from csv import DictWriter
 import json
 import mimetypes
+import webvtt
+import re
 
 
 class AvalonBase:
@@ -306,40 +308,71 @@ class AvalonSupplementalFile(AvalonBase):
         try:
             if 'vtt' in file_path:
                 mimetype = "text/vtt"
-            elif 'srt' in file_path:
-                mimetype = "text/srt"
-            with open(file_path, 'rb') as file:
-                files = {
-                    'file': (
-                        label, 
-                        file, 
-                        mimetype
-                    )
-                }
-                data = {}
-                metadata = {
-                    "type": type,
-                    "label": label,
-                    "language": "English",
-                    "treat_as_transcript": True,
-                    "machine_generated": True,
-                }
-                data['metadata'] = json.dumps(metadata)
-                
-                response = requests.post(
-                    url,
-                    files=files,
-                    data=data,
-                    headers=self.headers
-                )
-            new_identifer = response.json()['id']
-            new_response = self.add_suppl_filename(new_identifer, "Captions", metadata=metadata)
+                valid = self.is_valid_vtt(file_path)
+                if valid:
+                    with open(file_path, 'rb') as file:
+                        files = {
+                            'file': (
+                                label, 
+                                file, 
+                                mimetype
+                            )
+                        }
+                        data = {}
+                        metadata = {
+                            "type": type,
+                            "label": label,
+                            "language": "English",
+                            "treat_as_transcript": True,
+                            "machine_generated": True,
+                        }
+                        data['metadata'] = json.dumps(metadata)
+                        
+                        response = requests.post(
+                            url,
+                            files=files,
+                            data=data,
+                            headers=self.headers
+                        )
+                    new_identifer = response.json()['id']
+                    new_response = self.add_suppl_filename(new_identifer, "Captions", metadata=metadata)
 
-            return new_response
+                    return new_response
+            else:
+                # @TODO: Readd srts
+                print("Cannot add non-VTT this way yet")
+                return None
             
         except FileNotFoundError:
             print(f"Error: File not found at {file_path}")
             return None
+
+    @staticmethod    
+    def is_valid_vtt(file_path: str) -> bool:
+        TIMESTAMP_PATTERN = re.compile(
+            r"^(\d{2}:)?\d{2}:\d{2}\.\d{3} --> (\d{2}:)?\d{2}:\d{2}\.\d{3}"
+        )
+        errors = []
+        try:
+            cues = list(webvtt.read(file_path))
+        except Exception as e:
+            errors.append(f"Parsing failed: {e}")
+            return errors
+        
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        if not lines or not lines[0].strip().startswith("WEBVTT"):
+            errors.append("Missing or invalid WEBVTT header.")
+
+        for i, line in enumerate(lines, start=1):
+            if "-->" in line and not TIMESTAMP_PATTERN.match(line.strip()):
+                errors.append(f"Invalid cue timing on line {i}: {line.strip()}")
+
+        if len(errors) > 0:
+            return False
+        else:
+            return True
     
     def _add_file_with_mime_type(self, url, file_path, mime_type):
         """

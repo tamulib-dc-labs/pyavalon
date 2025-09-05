@@ -31,3 +31,9 @@ Requires a CSV with `id,filename,label,type`
 ```
 pyavalon upload_supplemental_files -c test_avalon.csv
 ```
+
+## Running Tests
+
+```
+pytest
+```
