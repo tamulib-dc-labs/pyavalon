@@ -76,9 +76,15 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv):
     help="The Avalon Instance you want",
     default="pre"
 )
-def get_media_object(media_object_id, instance):
+@click.option(
+    "--type",
+    "-t",
+    help="The Avalon Instance you want",
+    default="media_object"
+)
+def get_media_object(media_object_id, instance, type):
     item = AvalonMediaObject(media_object_id, prod_or_pre=instance)
-    pprint(item.get_object())
+    pprint(item.get_object(type=type))
 
 
 @cli.command(

@@ -66,9 +66,6 @@ class AvalonBase:
         except FileNotFoundError:
             print(f"Error: File not found at {file_path}")
             return None
-        except Exception as e:
-            print(f"Error uploading file: {str(e)}")
-            return None
 
 
 class AvalonCollection(AvalonBase):
@@ -179,9 +176,12 @@ class AvalonMediaObject(AvalonBase):
         super().__init__(prod_or_pre)
         self.identifier = identifier
 
-    def get_object(self):
+    def get_object(self, type="media_object"):
         # Todo: Rename to get
-        url = f"{self.base}/media_objects/{self.identifier}.json"
+        if type == "media_object":
+            url = f"{self.base}/media_objects/{self.identifier}.json"
+        elif type == "master_file":
+            url = f"{self.base}/master_files/{self.identifier}.json"
         return self.get(url)
     
     def get_metadata_elements(self):
@@ -289,6 +289,7 @@ class AvalonSupplementalFile(AvalonBase):
                         data=data,
                         headers=self.headers
                     )
+                print(response.json())
                 new_identifer = response.json()['id']
                 new_response = self.add_suppl_filename(new_identifer, filename)
 
@@ -296,9 +297,6 @@ class AvalonSupplementalFile(AvalonBase):
                 
             except FileNotFoundError:
                 print(f"Error: File not found at {file_path}")
-                return None
-            except Exception as e:
-                print(f"Error uploading file: {str(e)}")
                 return None
         else:
             return self.add_supplemental_file(url, file_path, filename=filename)
@@ -342,9 +340,6 @@ class AvalonSupplementalFile(AvalonBase):
         except FileNotFoundError:
             print(f"Error: File not found at {file_path}")
             return None
-        except Exception as e:
-            print(f"Error uploading file: {str(e)}")
-            return None
     
     def _add_file_with_mime_type(self, url, file_path, mime_type):
         """
@@ -367,9 +362,6 @@ class AvalonSupplementalFile(AvalonBase):
             
         except FileNotFoundError:
             print(f"Error: File not found at {file_path}")
-            return None
-        except Exception as e:
-            print(f"Error uploading file: {str(e)}")
             return None
         
                 
