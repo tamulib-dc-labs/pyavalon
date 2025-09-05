@@ -1,8 +1,20 @@
 # pyavalon
 
-Tools for doing things in batches in Avalon.
+Tools for doing things in batches in Avalon at TAMU.
 
-**This is a work in progress.**
+## Installing
+
+To install and use as a command line utility, just use pipx:
+
+```
+pipx install pyavalon
+```
+
+To use as a library, use pip:
+
+```
+pip install pyavalon
+```
 
 ## Get File Ids in a Collection
 

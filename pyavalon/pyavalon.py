@@ -1,5 +1,5 @@
 import click
-from pyavalon import AvalonCollection, AvalonSupplementalFile
+from pyavalon import AvalonCollection, AvalonSupplementalFile, AvalonMediaObject
 from pprint import pprint
 from csv import DictWriter, DictReader
 
@@ -61,6 +61,25 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv):
         writer = DictWriter(final_csv, fieldnames=["id", "label", "parent label", "derivative"])
         writer.writeheader()
         writer.writerows(final_files)
+
+@cli.command(
+    "get_media_object", help="Get a media object and pretty print."
+)
+@click.option(
+    "--media_object_id",
+    "-m",
+    help="The id of the media object"
+)
+@click.option(
+    "--instance",
+    "-i",
+    help="The Avalon Instance you want",
+    default="pre"
+)
+def get_media_object(media_object_id, instance):
+    item = AvalonMediaObject(media_object_id, prod_or_pre=instance)
+    pprint(item.get_object())
+
 
 @cli.command(
     "upload_supplemental_files", help="Upload supplemental files to Avalon based on contents of a spreadsheet"
