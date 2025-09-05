@@ -1,9 +1,13 @@
 [tool.poetry]
 name = "pyavalon"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["Mark Baggett <markpbaggett@gmail.com>"]
 readme = "README.md"
+
+include = [
+    "pyavalon/pdf/fonts/*",
+]
 
 [tool.poetry.dependencies]
 python = "^3.12"
