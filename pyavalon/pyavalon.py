@@ -1,5 +1,5 @@
 import click
-from pyavalon import AvalonCollection, AvalonSupplementalFile, AvalonMediaObject
+from pyavalon import AvalonCollection, AvalonSupplementalFile, AvalonMediaObject, AvalonMasterFile
 from pprint import pprint
 from csv import DictWriter, DictReader
 
@@ -127,3 +127,51 @@ def upload_supplemental_files(instance, csv):
                     type="transcript", 
                     label=row['label']
                 )
+
+@cli.command(
+    "find_files_missing_supplementals", help="Find all master files in a collection that are missing a particular file type"
+)
+@click.option(
+    "--collection",
+    "-c",
+    help="The id of the collection"
+)
+@click.option(
+    "--instance",
+    "-i",
+    help="The Avalon Instance you want",
+    default="pre"
+)
+@click.option(
+    "--file_type",
+    "-t",
+    help="The type you are looking for: caption, transcript, or pdf",
+    default="transcript"
+)
+def find_files_missing_supplementals(collection, instance, file_type):
+    bad_files = []
+    current_collection = AvalonCollection(collection, prod_or_pre=instance)
+    all_items = current_collection.page_items()
+    for k, v in all_items.items():
+        all_files = v['files']
+        for filename in all_files:
+            present = False
+            master_file = filename['id']
+            master = AvalonMasterFile(master_file, prod_or_pre=instance)
+            suppls = master.get_supplemental_files()
+            for suppl in suppls:
+                if file_type == "pdf":
+                    if 'generic' in suppl['type'] or 'pdf' in suppl['type']:
+                        present = True
+                else:
+                    if file_type == suppl['type']:
+                        present = True
+            if not present:
+                bad_files.append(
+                    {
+                        "master_file_id": master_file,
+                        "label": filename["label"],
+                        "parent label": v["title"], 
+                    }
+                )
+    pprint(bad_files)

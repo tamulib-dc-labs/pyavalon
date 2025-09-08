@@ -223,6 +223,16 @@ class AvalonMediaObject(AvalonBase):
         return response.content
 
 
+class AvalonMasterFile(AvalonBase):
+    def __init__(self, identifier, prod_or_pre="pre"):
+        super().__init__(prod_or_pre)
+        self.identifier = identifier
+    
+    def get_supplemental_files(self):
+        url = f"{self.base}/master_files/{self.identifier}/supplemental_files.json"
+        return self.get(url)
+
+
 class AvalonSupplementalFile(AvalonBase):
     def __init__(self, fedora_id, prod_or_pre="pre"):
         super().__init__(prod_or_pre)
@@ -412,17 +422,17 @@ if __name__ == "__main__":
     # example.get_json()
     # example.get_json(json_file)
     # work = "v118rd76r"
-    master_file = "v118rd76r"
+    # master_file = "v118rd76r"
     # pdf_file = "/Users/mark.baggett/Downloads/gerald-griffin_003_access.caption.vtt"
     # suppl = "97"
     # x = AvalonMediaObject(master_file).get_object()
     # pprint(x)
-    x = AvalonSupplementalFile(
-        master_file, 
-        prod_or_pre="pre"
-    )
+    # x = AvalonSupplementalFile(
+    #     master_file, 
+    #     prod_or_pre="pre"
+    # )
     # pprint(x.get_files())
-    pprint(x.get_files())
+    # pprint(x.get_files())
 
 
     # x.add_pdf(pdf_file, mime_type="application/pdf", filename="Part 1: PDF Transcript")
@@ -436,3 +446,8 @@ if __name__ == "__main__":
     # pprint(response.content)
     # response = x.add_suppl_filename(123, "PDF Transcript")
     # pprint(response)
+
+    master_file = "ff365531c"
+    x = AvalonMasterFile(master_file, prod_or_pre="prod")
+    suppls = x.get_supplemental_files()
+    pprint(suppls)
