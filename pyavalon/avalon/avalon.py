@@ -360,25 +360,22 @@ class AvalonSupplementalFile(AvalonBase):
     @staticmethod    
     def is_valid_vtt(file_path: str) -> bool:
         TIMESTAMP_PATTERN = re.compile(
-            r"^(\d{2}:)?\d{2}:\d{2}\.\d{3} --> (\d{2}:)?\d{2}:\d{2}\.\d{3}"
+            r"^(\d{2}:)?\d{2}:\d{2}\.\d{3} --> (\d{2}:)?\d{2}:\d{2}\.\d{3}$"
         )
         errors = []
         try:
             cues = list(webvtt.read(file_path))
         except Exception as e:
             errors.append(f"Parsing failed: {e}")
-            return errors
-        
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
-
         if not lines or not lines[0].strip().startswith("WEBVTT"):
             errors.append("Missing or invalid WEBVTT header.")
-
         for i, line in enumerate(lines, start=1):
-            if "-->" in line and not TIMESTAMP_PATTERN.match(line.strip()):
-                errors.append(f"Invalid cue timing on line {i}: {line.strip()}")
-
+            stripped_line = line.strip()
+            if "-->" in stripped_line:
+                if not TIMESTAMP_PATTERN.match(stripped_line):
+                    errors.append(f"Invalid cue timing on line {i}: {stripped_line}")
         if len(errors) > 0:
             return False, errors
         else:
