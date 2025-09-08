@@ -58,12 +58,13 @@ class TestSupplementalFile(unittest.TestCase):
     def test_bad_captions(self):
         suppl = AvalonSupplementalFile(fedora_id="qv33rw73v")
         valid = suppl.is_valid_vtt("fixtures/bad-captions.vtt")
-        self.assertFalse(valid)
+        self.assertFalse(valid[0])
+        self.assertEqual(len(valid[1]), 1, f"Test expected 1 error but found {len(valid[1])}: {valid[1]}")
 
     def test_good_captions(self):
         suppl = AvalonSupplementalFile(fedora_id="qv33rw73v")
         valid = suppl.is_valid_vtt("fixtures/good-captions.vtt")
-        self.assertTrue(valid)
+        self.assertTrue(valid[0])
 
 if __name__ == "__main__":
     unittest.main()

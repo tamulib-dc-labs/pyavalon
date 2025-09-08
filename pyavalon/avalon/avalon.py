@@ -220,7 +220,6 @@ class AvalonMediaObject(AvalonBase):
             },  
             headers=headers
         )
-        print(response.status_code)
         return response.content
 
 
@@ -308,7 +307,7 @@ class AvalonSupplementalFile(AvalonBase):
             if 'vtt' in file_path:
                 mimetype = "text/vtt"
                 valid = self.is_valid_vtt(file_path)
-                if valid:
+                if valid[0]:
                     with open(file_path, 'rb') as file:
                         files = {
                             'file': (
@@ -337,6 +336,8 @@ class AvalonSupplementalFile(AvalonBase):
                     new_response = self.add_suppl_filename(new_identifer, "Captions", metadata=metadata)
 
                     return new_response
+                else:
+                    print(f"Error. {file_path} has these errors: {valid[1]}")    
             else:
                 # @TODO: Readd srts
                 print("Cannot add non-VTT this way yet")
@@ -369,9 +370,9 @@ class AvalonSupplementalFile(AvalonBase):
                 errors.append(f"Invalid cue timing on line {i}: {line.strip()}")
 
         if len(errors) > 0:
-            return False
+            return False, errors
         else:
-            return True
+            return True, []
     
     def _add_file_with_mime_type(self, url, file_path, mime_type):
         """
@@ -414,12 +415,14 @@ if __name__ == "__main__":
     master_file = "v118rd76r"
     # pdf_file = "/Users/mark.baggett/Downloads/gerald-griffin_003_access.caption.vtt"
     # suppl = "97"
-    x = AvalonMediaObject(master_file).get_object()
-    pprint(x)
-    # x = AvalonSupplementalFile(
-    #     master_file, 
-    #     prod_or_pre="pre"
-    # )
+    # x = AvalonMediaObject(master_file).get_object()
+    # pprint(x)
+    x = AvalonSupplementalFile(
+        master_file, 
+        prod_or_pre="pre"
+    )
+    # pprint(x.get_files())
+    pprint(x.get_files())
 
 
     # x.add_pdf(pdf_file, mime_type="application/pdf", filename="Part 1: PDF Transcript")

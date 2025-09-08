@@ -110,18 +110,18 @@ def upload_supplemental_files(instance, csv):
                 row['id'], 
                 prod_or_pre=instance
             )
-            if row.get('type') == 'pdf':
+            if row.get('type').strip() == 'pdf':
                 supplemental.add_pdf(
                     row['filename'], 
                     mime_type="application/pdf", 
                     filename=row['label']
                 )
-            elif row.get('type') == "caption":
+            elif row.get('type').strip() == "caption":
                 supplemental.add_caption_or_transcript(
                     row['filename'], 
                     label=row['label']
                 )
-            elif row.get('type') == "transcript":
+            elif row.get('type').strip() == "transcript":
                 supplemental.add_caption_or_transcript(
                     row['filename'], 
                     type="transcript", 
