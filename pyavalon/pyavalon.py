@@ -2,6 +2,8 @@ import click
 from pyavalon import AvalonCollection, AvalonSupplementalFile, AvalonMediaObject, AvalonMasterFile
 from pprint import pprint
 from csv import DictWriter, DictReader
+import os
+import subprocess
 
 
 @click.group()
@@ -42,21 +44,65 @@ def print_all_collections(instance):
     help="The Path to Where to Write Your CSV",
     default="output.csv"
 )
-def get_file_ids_from_a_colleciton(collection, instance, output_csv):
+@click.option(
+    "--download",
+    is_flag=True,
+    help="Download resources in additon to creating CSV."
+)
+@click.option(
+    "--file_output",
+    "-f",
+    help="The path where to write your files",
+    default="tmp"
+)
+@click.option(
+    "--username",
+    "-u",
+    default="username",
+    help="The username you want to download your files"
+)
+def get_file_ids_from_a_colleciton(collection, instance, output_csv, download, file_output, username):
     final_files = []
     current_collection = AvalonCollection(collection, prod_or_pre=instance)
     all_items = current_collection.page_items()
     for k, v in all_items.items():
         all_files = v['files']
+        low = medium = ""
         for file_id in all_files:
+            for derivative in file_id["files"]:
+                if 'low' in derivative["derivativeFile"]:
+                    low = derivative["derivativeFile"]
+                if 'medium' in derivative['derivativeFile']:
+                    medium = derivative["derivativeFile"]
+            if low != "":
+                best = low
+            elif medium != "":
+                best = medium
+            else:
+                best = file_id["files"][0]["derivativeFile"]
             final_files.append(
                 {
                     "id": file_id["id"],
                     "label": file_id["label"],
                     "parent label": v["title"], 
-                    "derivative": file_id["files"][0]["derivativeFile"]
+                    "derivative": best.replace("file://", "").replace("avalon", f"avalon_{instance}")
                 }
             )
+    if download:
+        os.makedirs(file_output, exist_ok=True)
+        for derivative in final_files:
+            command = [
+                "scp",
+                f"{username}@access.library.tamu.edu:{derivative['derivative']}",
+                file_output
+            ]
+            try:
+                subprocess.run(command, check=True)
+            except subprocess.CalledProcessError:
+                print(
+                    f"Failed to download {derivative.get('derivative')} from {derivative.get('parent label')} - {derivative.get('label')}.")
+
+            
     with open(output_csv, 'w') as final_csv:
         writer = DictWriter(final_csv, fieldnames=["id", "label", "parent label", "derivative"])
         writer.writeheader()
