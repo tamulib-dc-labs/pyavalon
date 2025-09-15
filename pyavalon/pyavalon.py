@@ -47,7 +47,7 @@ def print_all_collections(instance):
 @click.option(
     "--download",
     is_flag=True,
-    help="Download resources in additon to creating CSV."
+    help="Download resources in addition to creating CSV."
 )
 @click.option(
     "--file_output",
@@ -68,6 +68,19 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv, download, f
     for k, v in all_items.items():
         all_files = v['files']
         low = medium = ""
+        work_id = v.get('id', "")
+        title = v.get('title', "")
+        creator = v.get('main_contributors')
+        date = v['fields'].get('date_issued', "")
+        contributor = v['fields'].get('contributor', [])
+        genre = v['fields'].get('genre', [])
+        subject = ",".join(v['fields'].get('subject', []))
+        topical_subject = ",".join(v['fields'].get('topical_subject', []))
+        geographic_subject = ",".join(v['fields'].get('geographic_subject', []))
+        temporal_subject = ",".join(v['fields'].get('temporal_subject', []))
+        rights = v['fields'].get('terms_of_use', "")
+        identifier = ",".join(v['fields'].get('other_identifier', []))
+        publisher = ",".join(v['fields'].get('publisher', []))
         for file_id in all_files:
             for derivative in file_id["files"]:
                 if 'low' in derivative["derivativeFile"]:
@@ -82,9 +95,17 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv, download, f
                 best = file_id["files"][0]["derivativeFile"]
             final_files.append(
                 {
-                    "id": file_id["id"],
-                    "label": file_id["label"],
-                    "parent label": v["title"], 
+                    "Parent work": work_id,
+                    "Creator": ",".join(creator),
+                    "Date": date,
+                    "Contributor": ",".join(contributor),
+                    "File id": file_id['id'],
+                    "File title": file_id['label'],
+                    "Work title": title,
+                    "Subject": f"{subject} {genre} {temporal_subject} {geographic_subject} {topical_subject}",
+                    "Rights": rights,
+                    "Identifier": identifier,
+                    "Publisher": publisher,
                     "derivative": best.replace("file://", "").replace("avalon", f"avalon_{instance}")
                 }
             )
@@ -104,7 +125,7 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv, download, f
 
             
     with open(output_csv, 'w') as final_csv:
-        writer = DictWriter(final_csv, fieldnames=["id", "label", "parent label", "derivative"])
+        writer = DictWriter(final_csv, fieldnames=final_files[0].keys())
         writer.writeheader()
         writer.writerows(final_files)
 
