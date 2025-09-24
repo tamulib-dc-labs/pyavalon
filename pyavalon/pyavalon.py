@@ -68,6 +68,7 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv, download, f
     for k, v in all_items.items():
         all_files = v['files']
         low = medium = ""
+        hls_url = ""
         work_id = v.get('id', "")
         title = v.get('title', "")
         creator = v.get('main_contributors')
@@ -85,8 +86,10 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv, download, f
             for derivative in file_id["files"]:
                 if 'low' in derivative["derivativeFile"]:
                     low = derivative["derivativeFile"]
+                    hls_url = derivative["hls_url"]
                 if 'medium' in derivative['derivativeFile']:
                     medium = derivative["derivativeFile"]
+                    hls_url = derivative["hls_url"]
             if low != "":
                 best = low
             elif medium != "":
@@ -106,7 +109,8 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv, download, f
                     "Rights": rights,
                     "Identifier": identifier,
                     "Publisher": publisher,
-                    "derivative": best.replace("file://", "").replace("avalon", f"avalon_{instance}")
+                    "derivative": best.replace("file://", "").replace("avalon", f"avalon_{instance}"),
+                    "hls_url": hls_url,
                 }
             )
     if download:
