@@ -4,7 +4,7 @@ from pprint import pprint
 from csv import DictWriter, DictReader
 import os
 import subprocess
-
+import json
 
 @click.group()
 def cli() -> None:
@@ -61,7 +61,7 @@ def print_all_collections(instance):
     default="username",
     help="The username you want to download your files"
 )
-def get_file_ids_from_a_colleciton(collection, instance, output_csv, download, file_output, username):
+def get_file_ids_from_a_collection(collection, instance, output_csv, download, file_output, username):
     final_files = []
     current_collection = AvalonCollection(collection, prod_or_pre=instance)
     all_items = current_collection.page_items()
@@ -104,6 +104,7 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv, download, f
                     "Contributor": ",".join(contributor),
                     "File id": file_id['id'],
                     "File title": file_id['label'],
+                    "Genre": ",".join(genre),
                     "Work title": title,
                     "Subject": f"{subject} {genre} {temporal_subject} {geographic_subject} {topical_subject}",
                     "Rights": rights,
@@ -155,7 +156,10 @@ def get_file_ids_from_a_colleciton(collection, instance, output_csv, download, f
 )
 def get_media_object(media_object_id, instance, type):
     item = AvalonMediaObject(media_object_id, prod_or_pre=instance)
-    pprint(item.get_object(type=type))
+    thing = item.get_object(type=type)
+    pprint(thing)
+    with open('media_object.json', 'w') as json_file:
+        json.dump(thing, json_file, indent=4)
 
 
 @cli.command(
@@ -246,3 +250,47 @@ def find_files_missing_supplementals(collection, instance, file_type):
                     }
                 )
     pprint(bad_files)
+
+@cli.command(
+    "get_json_for_whisper_reviewer",
+    help="use a csv to get json for a whisper reviewer site"
+)
+@click.option(
+    "--instance",
+    "-i",
+    help="The Avalon Instance you want",
+    default="pre"
+)
+@click.option(
+    "--csv",
+    "-c",
+    help="The path to your CSV with your data",
+)
+@click.option(
+    "--output",
+    "-o",
+    help="The path to your Output JSON file",
+    default="output.json"
+)
+def get_json_for_whisper_reviewer(instance, csv, output):
+    all_items =[]
+    with open(csv, 'r') as my_csv:
+        reader = DictReader(my_csv)
+        for row in reader:
+            item = AvalonMediaObject(row.get('media_object_id'), prod_or_pre=instance)
+            media_object_json = item.get_object(type="media_object")
+            for file in media_object_json['files']:
+                for filename in file['files']:
+                    if 'medium' in filename['hls_url']:
+                        filename_part = filename['hls_url'].split('/')[-2]
+                        final = filename_part.split('-medium')[0]
+                        item = {
+                            "audio": filename["hls_url"],
+                            "url": f"{row.get('path_to_json', '')}/{final}.json",
+                            "vtt": f"{row.get('path_to_vtts', '')}/{final}.vtt",
+                            "name": final,
+                        }
+                        all_items.append(item)
+
+    with open(output, 'w') as f:
+        json.dump(all_items, f, indent=4)
