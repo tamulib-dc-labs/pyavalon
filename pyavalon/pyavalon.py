@@ -50,6 +50,21 @@ def print_all_collections(instance):
     help="Download resources in addition to creating CSV."
 )
 @click.option(
+    "--get_range",
+    is_flag=True,
+    help="Instead of getting all items, just get a range of works in pages of 10."
+)
+@click.option(
+    "--start",
+    type=int,
+    help="Start page (required if --get_range is set)"
+)
+@click.option(
+    "--end",
+    type=int,
+    help="End page (required if --get_range is set)"
+)
+@click.option(
     "--file_output",
     "-f",
     help="The path where to write your files",
@@ -61,10 +76,23 @@ def print_all_collections(instance):
     default="username",
     help="The username you want to download your files"
 )
-def get_file_ids_from_a_collection(collection, instance, output_csv, download, file_output, username):
+def get_file_ids_from_a_collection(
+        collection,
+        instance,
+        output_csv,
+        download,
+        file_output,
+        username,
+        get_range,
+        start,
+        end
+):
     final_files = []
     current_collection = AvalonCollection(collection, prod_or_pre=instance)
-    all_items = current_collection.page_items()
+    if get_range:
+        all_items = current_collection.page_items_in_range(start, end)
+    else:
+        all_items = current_collection.page_items()
     for k, v in all_items.items():
         all_files = v['files']
         low = medium = ""

@@ -61,7 +61,7 @@ class AvalonBase:
                 response = requests.post(
                     url,
                     files=files,
-                    headers=self.headers  # Don't add Content-Type - requests handles it
+                    headers=self.headers
                 )
             return response
             
@@ -80,7 +80,7 @@ class AvalonCollection(AvalonBase):
         return self.get(url)
     
     def get_all_collections(self):
-        url = url = f"{self.base}/admin/collections.json"
+        url = f"{self.base}/admin/collections.json"
         return self.get(url)
     
     def get_items(self, verbose=True, page=None, per_page=5):
@@ -92,7 +92,30 @@ class AvalonCollection(AvalonBase):
             return self.get(url)
         else:
             return list(self.get(url).keys())
-        
+
+    def page_items_in_range(self, start_page, end_page, verbose=True):
+        """Pages through all items from start to end with progress bar"""
+        all_items = {}
+        total_pages = (end_page - start_page) + 1
+        page = start_page
+
+        with tqdm(total=total_pages, desc="Fetching pages", disable=not verbose) as pbar:
+            while page <= end_page:
+                new_items = self.get_items(
+                    page=page,
+                    per_page=10
+                )
+                for k, v in new_items.items():
+                    if k in {"status", "error", "errors"}:
+                        print(f"Page {page} returned {k} | {v} with items per page set to 10")
+                    else:
+                        all_items[k] = v
+
+                page += 1
+                pbar.update(1)
+
+        return all_items
+
     def page_items(self, verbose=True, items_per_page=10):
         """ pages through all titles until it has all members
         """ 
@@ -103,7 +126,14 @@ class AvalonCollection(AvalonBase):
         for page in iterator:
             new_items = self.get_items(page=page, per_page=items_per_page)
             for k, v in new_items.items():
-                all_items[k]=v
+                if k == "status":
+                    print(f"Page {page} returned {k} | {v} with items per page set to {items_per_page}")
+                elif k == "error":
+                    print(f"Page {page} returned {k} | {v} with items per page set to {items_per_page}")
+                elif k == "errors":
+                    print(f"Page {page} returned {k} | {v} with items per page set to {items_per_page}")
+                else:
+                    all_items[k] = v
         return all_items
     
     def write_csv(self, data):
@@ -444,7 +474,14 @@ if __name__ == "__main__":
     # response = x.add_suppl_filename(123, "PDF Transcript")
     # pprint(response)
 
-    master_file = "ff365531c"
-    x = AvalonMasterFile(master_file, prod_or_pre="prod")
-    suppls = x.get_supplemental_files()
-    pprint(suppls)
+    # master_file = "8910jt826"
+    # x = AvalonMediaObject(master_file, prod_or_pre="pre")
+    # pprint(x.get_object())
+
+    collection_id = "xd07gs82c"
+    x = AvalonCollection(collection_id, prod_or_pre="pre")
+    results = x.page_items_in_range(3,6)
+    print(results)
+    # results = x.page_items()
+    with open('corinna_error5.json', 'w') as f:
+        json.dump(results, f, indent=4)
