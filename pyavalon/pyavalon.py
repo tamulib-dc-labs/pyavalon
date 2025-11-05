@@ -108,7 +108,7 @@ def get_file_ids_from_a_collection(
         geographic_subject = ",".join(v['fields'].get('geographic_subject', []))
         temporal_subject = ",".join(v['fields'].get('temporal_subject', []))
         rights = v['fields'].get('terms_of_use', "")
-        identifier = ",".join(v['fields'].get('other_identifier', []))
+        identifier = v['fields'].get('other_identifier') if isinstance(v['fields'].get('other_identifier'), str) else ",".join(v['fields'].get('other_identifier') or [])
         publisher = ",".join(v['fields'].get('publisher', []))
         for file_id in all_files:
             for derivative in file_id["files"]:
