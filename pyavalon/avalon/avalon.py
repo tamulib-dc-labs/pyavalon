@@ -9,6 +9,7 @@ import json
 import mimetypes
 import webvtt
 import re
+from iiif_prezi3 import Collection
 
 
 class AvalonBase:
@@ -201,6 +202,33 @@ class AvalonCollection(AvalonBase):
         with open(json_file, "w") as my_file:
             json.dump(response, my_file, indent=4)
 
+    def make_iiif_collection(self, json_file="collection.json", collection_id="https://tamulib-dc-labs.github.io/iiif/iiif_collection.json"):
+        collection_details = self.get_collection()
+        response = self.page_items()
+        collection = Collection(
+            id=collection_id,
+            label=collection_details.get("name", ''),
+            summary=collection_details.get("description", ''),
+            thumbnail={
+                "id": f"https://avalon.library.tamu.edu/admin/collections/{self.identifier}/poster",
+                "type": "Image"
+            }
+        )
+        for k, v in response.items():
+            if v.get('published') and v.get('visibility') == 'public':
+                thumbnail = v.get('files')[0].get('id')
+                collection.make_manifest(
+                    id=f"https://avalon.library.tamu.edu/media_objects/{k}/manifest.json",
+                    label=v.get("title"),
+                    summary=v.get("summary"),
+                    thumbnail={
+                        "id": f"https://avalon.library.tamu.edu/master_files/{thumbnail}/thumbnail",
+                        "type": "Image"
+                    }
+                )
+        collection_json = collection.json(indent=2)
+        with open(json_file, "w") as my_file:
+            my_file.write(collection_json)
 
 class AvalonMediaObject(AvalonBase):
     # TODO: Rename as AvalonTitle
@@ -478,10 +506,16 @@ if __name__ == "__main__":
     # x = AvalonMediaObject(master_file, prod_or_pre="pre")
     # pprint(x.get_object())
 
-    collection_id = "xd07gs82c"
-    x = AvalonCollection(collection_id, prod_or_pre="pre")
-    results = x.page_items_in_range(3,6)
-    print(results)
-    # results = x.page_items()
-    with open('corinna_error5.json', 'w') as f:
-        json.dump(results, f, indent=4)
+    # collection_id = "xd07gs82c"
+    # x = AvalonCollection(collection_id, prod_or_pre="pre")
+    # results = x.page_items_in_range(3,6)
+    # print(results)
+    # # results = x.page_items()
+    # with open('corinna_error5.json', 'w') as f:
+    #     json.dump(results, f, indent=4)
+
+    collection_id = "vd66w0068"
+    x = AvalonCollection(collection_id, prod_or_pre="prod")
+    x.make_iiif_collection(
+         json_file="sci-fi-radio.json"
+    )

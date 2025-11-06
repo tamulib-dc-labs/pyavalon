@@ -19,6 +19,7 @@ click = "^8.2.1"
 ruff = "^0.12.11"
 webvtt-py = "^0.5.1"
 pytest = "^8.4.2"
+iiif-prezi3 = "^3.0.0"
 
 [tool.poetry.scripts]
 pyavalon = "pyavalon.pyavalon:cli"
