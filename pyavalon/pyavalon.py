@@ -25,6 +25,33 @@ def print_all_collections(instance):
 
 
 @cli.command(
+    "create_iiif_collection", help="Use to Create a IIIF Collection"
+)
+@click.option(
+    "--instance",
+    "-i",
+    help="The Avalon Instance you want",
+    default="pre"
+)
+@click.option(
+    "--collection",
+    "-c",
+    help="The id of the collection"
+)
+@click.option(
+    "--output",
+    "-o",
+    help="The filename for your IIIF Collection",
+    default="collection.json"
+)
+def create_iiif_collection(instance: str, collection: str, output: str) -> None:
+    collection = AvalonCollection(collection, prod_or_pre=instance)
+    collection.make_iiif_collection(
+        json_file=output
+    )
+
+
+@cli.command(
     "get_file_ids_from_a_collection", help="Find all the ids for master files in a collection"
 )
 @click.option(
