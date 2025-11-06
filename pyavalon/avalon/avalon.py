@@ -210,7 +210,7 @@ class AvalonCollection(AvalonBase):
             label=collection_details.get("name", ''),
             summary=collection_details.get("description", ''),
             thumbnail={
-                "id": f"https://avalon.library.tamu.edu/admin/collections/{self.identifier}/poster",
+                "id": f"https://avalon.library.tamu.edu/collections/{self.identifier}/poster",
                 "type": "Image"
             }
         )
