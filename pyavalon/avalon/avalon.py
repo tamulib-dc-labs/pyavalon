@@ -9,7 +9,16 @@ import json
 import mimetypes
 import webvtt
 import re
+import uuid
 from iiif_prezi3 import Collection
+
+
+def safe_json(obj):
+    """
+    Serialize to JSON without \" sequences that confuse PHP's fgetcsv.
+    Uses \\u0022 (Unicode escape for ") instead - json_decode restores it.
+    """
+    return json.dumps(obj).replace('\\"', '\\u0022')
 
 
 class AvalonBase:
@@ -229,6 +238,85 @@ class AvalonCollection(AvalonBase):
         collection_json = collection.json(indent=2)
         with open(json_file, "w") as my_file:
             my_file.write(collection_json)
+
+    AMI_SET_COLUMNS = [
+        "node_uuid", "label", "type", "abstract", "creator", "contributor",
+        "date_issued", "language", "subject", "geographic_subject",
+        "temporal_subject", "genre_form", "note", "table_of_contents",
+        "identifier", "extent", "rights", "digital_publisher", "ismemberof",
+        "related_url", "Image", "Document", "iiifmanifest",
+    ]
+
+    def _get_vtt_documents(self, work_id):
+        """
+        Pull every text/vtt "supplementing" annotation out of the work's public
+        IIIF manifest and return one URL per underlying supplemental file,
+        preferring the /transcripts rendering over /captions.
+        """
+        manifest = self.get(f"{self.base}/media_objects/{work_id}/manifest.json")
+        found = {}
+        for canvas in manifest.get("items", []):
+            for annotation_page in canvas.get("annotations", []):
+                for annotation in annotation_page.get("items", []):
+                    body = annotation.get("body", {})
+                    if body.get("format") != "text/vtt":
+                        continue
+                    url = body.get("id", "")
+                    supplemental_file_key = url.rsplit("/", 1)[0]
+                    if url.endswith("/transcripts") or supplemental_file_key not in found:
+                        found[supplemental_file_key] = url
+        return list(found.values())
+
+    def create_ami_set(self, output_csv="ami_set.csv", ismemberof="", verbose=True):
+        """
+        Build an Archipelago AMI set CSV for every member of this collection.
+        Image is the Avalon poster of the work's first master file, Document
+        is any VTT captions/transcripts attached to the work, and iiifmanifest
+        is a link to the work's IIIF manifest.
+        """
+        all_items = self.page_items(verbose=verbose)
+        rows = []
+        for work_id, item in tqdm(all_items.items(), desc="Building AMI set", disable=not verbose):
+            fields = item.get("fields", {})
+            master_files = item.get("files") or []
+            poster_master_id = master_files[0]["id"] if master_files else ""
+            image_url = f"{self.base}/master_files/{poster_master_id}/poster" if poster_master_id else ""
+            other_identifier = fields.get("other_identifier")
+            if isinstance(other_identifier, str):
+                other_identifier = [other_identifier] if other_identifier else []
+            resource_type = fields.get("avalon_resource_type") or []
+            rows.append({
+                "node_uuid": str(uuid.uuid4()),
+                "label": item.get("title", ""),
+                "type": resource_type[0].title() if resource_type else "",
+                "abstract": fields.get("abstract") or item.get("summary", ""),
+                "creator": safe_json(fields.get("creator") or []),
+                "contributor": safe_json(fields.get("contributor") or []),
+                "date_issued": fields.get("date_issued") or "",
+                "language": safe_json(fields.get("language") or []),
+                "subject": safe_json(fields.get("subject") or []),
+                "geographic_subject": safe_json(fields.get("geographic_subject") or []),
+                "temporal_subject": safe_json(fields.get("temporal_subject") or []),
+                "genre_form": safe_json(fields.get("genre") or []),
+                "note": safe_json(fields.get("note") or []),
+                "table_of_contents": "; ".join(fields.get("table_of_contents") or []),
+                "identifier": safe_json([
+                    {"value": value, "authority": "local"} for value in (other_identifier or [])
+                ]),
+                "extent": safe_json(fields.get("physical_description") or []),
+                "rights": fields.get("terms_of_use") or "",
+                "digital_publisher": "; ".join(fields.get("publisher") or []),
+                "ismemberof": ismemberof,
+                "related_url": f"{self.base}/media_objects/{work_id}",
+                "Image": image_url,
+                "Document": ";".join(self._get_vtt_documents(work_id)),
+                "iiifmanifest": f"{self.base}/media_objects/{work_id}/manifest.json",
+            })
+        with open(output_csv, "w", newline="", encoding="utf-8") as f:
+            writer = DictWriter(f, fieldnames=self.AMI_SET_COLUMNS)
+            writer.writeheader()
+            writer.writerows(rows)
+        return rows
 
 class AvalonMediaObject(AvalonBase):
     # TODO: Rename as AvalonTitle

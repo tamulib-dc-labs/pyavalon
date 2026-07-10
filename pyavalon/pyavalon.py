@@ -190,6 +190,37 @@ def get_file_ids_from_a_collection(
         writer.writerows(final_files)
 
 @cli.command(
+    "create_ami_set", help="Create an Archipelago AMI set CSV for all members of a collection"
+)
+@click.option(
+    "--collection",
+    "-c",
+    help="The id of the collection"
+)
+@click.option(
+    "--instance",
+    "-i",
+    help="The Avalon Instance you want",
+    default="pre"
+)
+@click.option(
+    "--output_csv",
+    "-o",
+    help="The Path to Where to Write Your CSV",
+    default="ami_set.csv"
+)
+@click.option(
+    "--ismemberof",
+    help="The Archipelago node_uuid of the target Collection ADO to stamp on every row",
+    default=""
+)
+def create_ami_set(collection, instance, output_csv, ismemberof):
+    current_collection = AvalonCollection(collection, prod_or_pre=instance)
+    current_collection.create_ami_set(output_csv=output_csv, ismemberof=ismemberof)
+    print(f"Wrote AMI set to {output_csv}")
+
+
+@cli.command(
     "get_media_object", help="Get a media object and pretty print."
 )
 @click.option(
