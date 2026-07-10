@@ -288,7 +288,7 @@ class AvalonCollection(AvalonBase):
             rows.append({
                 "node_uuid": str(uuid.uuid4()),
                 "label": item.get("title", ""),
-                "type": resource_type[0].title() if resource_type else "",
+                "type": "StreamingVideo",
                 "abstract": fields.get("abstract") or item.get("summary", ""),
                 "creator": safe_json(fields.get("creator") or []),
                 "contributor": safe_json(fields.get("contributor") or []),
