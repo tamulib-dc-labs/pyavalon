@@ -101,6 +101,14 @@ CSV columns: `media_object_id,path_to_json,path_to_vtts`.
 pyavalon get_json_for_whisper_reviewer -c input.csv -o output.json
 ```
 
+### `create_ami_set`
+
+Builds an AMI set from a collection id.
+
+```
+pyavalon create_ami_set -c <collection_id> -i prod -o ami_set.csv
+```
+
 ## Running Tests
 
 ```
