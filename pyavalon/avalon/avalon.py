@@ -240,7 +240,7 @@ class AvalonCollection(AvalonBase):
             my_file.write(collection_json)
 
     AMI_SET_COLUMNS = [
-        "node_uuid", "label", "type", "abstract", "creator", "contributor",
+        "node_uuid", "label", "ismemberof", "type", "abstract", "creator", "contributor",
         "date_issued", "language", "subject", "geographic_subject",
         "temporal_subject", "genre_form", "note", "table_of_contents",
         "identifier", "extent", "rights", "digital_publisher", "ismemberof",
@@ -284,9 +284,9 @@ class AvalonCollection(AvalonBase):
             other_identifier = fields.get("other_identifier")
             if isinstance(other_identifier, str):
                 other_identifier = [other_identifier] if other_identifier else []
-            resource_type = fields.get("avalon_resource_type") or []
             rows.append({
                 "node_uuid": str(uuid.uuid4()),
+                "ismemberof": "",
                 "label": item.get("title", ""),
                 "type": "StreamingVideo",
                 "abstract": fields.get("abstract") or item.get("summary", ""),

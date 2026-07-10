@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyavalon"
-version = "0.1.11"
+version = "0.1.14"
 description = ""
 authors = ["Mark Baggett <markpbaggett@gmail.com>"]
 readme = "README.md"
