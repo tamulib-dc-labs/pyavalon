@@ -11,6 +11,13 @@ import webvtt
 import re
 import uuid
 from iiif_prezi3 import Collection
+from .metadata import (
+    PAIRED_FIELDS,
+    diff_fields,
+    preserve_paired_fields,
+    read_replacement_csv,
+    write_repeated_column_csv,
+)
 
 
 def safe_json(obj):
@@ -194,17 +201,17 @@ class AvalonCollection(AvalonBase):
                     "-af", "highpass=f=100, lowpass=f=8000, afftdn, loudnorm",
                     "-acodec", "libmp3lame",
                     "-q:a", "2",
-                    f"{output}/{current.get('work_id')}_{current.get("file_id")}.mp3"
+                    f"{output}/{current.get('work_id')}_{current.get('file_id')}.mp3"
                 ]
                 os.makedirs(output, exist_ok=True)
-                if os.path.exists(f"{output}/{current.get('work_id')}_{current.get("file_id")}.mp3"):
+                if os.path.exists(f"{output}/{current.get('work_id')}_{current.get('file_id')}.mp3"):
                     pass
                 else:
                     try:
                         subprocess.run(command, check=True)
                     except CalledProcessError:
                         # Todo: This needs to be investigated Better Handled
-                        print(f"Failed to download {current.get("file_id")} from {current.get('work_id')}")
+                        print(f"Failed to download {current.get('file_id')} from {current.get('work_id')}")
 
     def get_json(self, json_file):
         response = self.page_items()
@@ -349,6 +356,29 @@ class AvalonMediaObject(AvalonBase):
         response = self.get_object()
         with open("example.json", "w") as my_file:
             json.dump(response, my_file, indent=4)
+
+    def current_fields(self):
+        """The work's descriptive metadata as Avalon currently holds it."""
+        return self.get_object().get("fields", {}) or {}
+
+    def replace_metadata(self, fields):
+        """Replace the named fields on this work.
+
+        Fields not named are left alone by Avalon -- except note,
+        other_identifier and related_item_url, which it rebuilds on every
+        update whether or not they were sent. Callers should run the payload
+        through metadata.preserve_paired_fields first; this method sends
+        exactly what it is given.
+        """
+        url = f"{self.base}/media_objects/{self.identifier}.json"
+        headers = self.headers.copy()
+        headers['Content-Type'] = 'application/json'
+        response = requests.put(url, json={"fields": fields}, headers=headers)
+        if response.status_code not in (200, 201):
+            raise RuntimeError(
+                f"{self.identifier}: Avalon returned {response.status_code} -- {response.text[:300]}"
+            )
+        return response
 
     def update_offsets(self, offset):
         #@TODO: This needs implementation.  Offset needs to live on a master file which has no direct API.
@@ -551,6 +581,88 @@ class AvalonSupplementalFile(AvalonBase):
             return None
         
                 
+def replace_metadata_from_csv(
+    csv_path,
+    prod_or_pre="pre",
+    dry_run=False,
+    report_csv="metadata_replacement_report.csv",
+    backup_csv="metadata_replacement_backup.csv",
+    verbose=True,
+):
+    """Replace metadata on every work named in a replacement CSV.
+
+    A field is replaced only if its column appears in the CSV at all, so an
+    absent column leaves that field alone and an all-blank column clears it.
+
+    Two files are always written, dry run or not: a backup holding the old
+    values in the same repeated-column format (feed it back in to undo a run)
+    and a report of what changed. Every write is read back and verified,
+    because Avalon erases fields that fail validation and still answers 200.
+    """
+    updates = read_replacement_csv(csv_path)
+    report_rows = []
+    backup_records = []
+
+    iterator = tqdm(updates, desc="Replacing metadata", disable=not verbose)
+    for update in iterator:
+        work = AvalonMediaObject(update.work_id, prod_or_pre=prod_or_pre)
+        try:
+            current = work.current_fields()
+        except Exception as error:
+            report_rows.append({
+                "work id": update.work_id, "field": "", "old value": "", "new value": "",
+                "changed": "", "status": f"error fetching: {error}",
+            })
+            continue
+
+        # Back up the fields this run touches, plus the three Avalon rewrites
+        # unprompted, so the backup is a complete undo for what we are about to do.
+        backup_fields = {name: current.get(name) for name in update.fields}
+        for primary, partner in PAIRED_FIELDS.items():
+            backup_fields.setdefault(primary, current.get(primary))
+            backup_fields.setdefault(partner, current.get(partner))
+        backup_records.append((update.work_id, backup_fields))
+
+        payload = preserve_paired_fields(update.fields, current)
+        changes = diff_fields(current, update.fields)
+
+        if dry_run:
+            status = "dry run"
+        else:
+            try:
+                work.replace_metadata(payload)
+            except Exception as error:
+                status = f"error writing: {error}"
+            else:
+                # Avalon nulls any field that fails validation and still
+                # returns 200, so a success response is not proof.
+                verified = work.current_fields()
+                mismatched = [
+                    name for name, wanted in payload.items()
+                    if diff_fields(verified, {name: wanted})[name][2]
+                ]
+                status = "ok" if not mismatched else f"NOT APPLIED: {', '.join(mismatched)}"
+
+        for name, (old, new, changed) in sorted(changes.items()):
+            report_rows.append({
+                "work id": update.work_id,
+                "field": name,
+                "old value": " | ".join(old),
+                "new value": " | ".join(new),
+                "changed": "yes" if changed else "no",
+                "status": status,
+            })
+
+    if backup_records:
+        write_repeated_column_csv(backup_csv, backup_records)
+    if report_rows:
+        with open(report_csv, "w", newline="", encoding="utf-8") as handle:
+            writer = DictWriter(handle, fieldnames=list(report_rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(report_rows)
+    return report_rows
+
+
 if __name__ == "__main__":
     from pprint import pprint
     # collection = "1c18df80p"

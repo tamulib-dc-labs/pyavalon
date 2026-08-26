@@ -1,1 +1,2 @@
-from .avalon import AvalonMediaObject as AvalonMediaObject, AvalonCollection as AvalonCollection, AvalonSupplementalFile as AvalonSupplementalFile, AvalonMasterFile as AvalonMasterFile
+from .avalon import AvalonMediaObject as AvalonMediaObject, AvalonCollection as AvalonCollection, AvalonSupplementalFile as AvalonSupplementalFile, AvalonMasterFile as AvalonMasterFile, replace_metadata_from_csv as replace_metadata_from_csv
+from .metadata import MetadataCsvError as MetadataCsvError, read_replacement_csv as read_replacement_csv, preserve_paired_fields as preserve_paired_fields

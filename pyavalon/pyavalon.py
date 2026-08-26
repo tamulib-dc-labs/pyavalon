@@ -1,5 +1,5 @@
 import click
-from pyavalon import AvalonCollection, AvalonSupplementalFile, AvalonMediaObject, AvalonMasterFile
+from pyavalon import AvalonCollection, AvalonSupplementalFile, AvalonMediaObject, AvalonMasterFile, replace_metadata_from_csv, MetadataCsvError
 from pprint import pprint
 from csv import DictWriter, DictReader
 import os
@@ -218,6 +218,69 @@ def create_ami_set(collection, instance, output_csv, ismemberof):
     current_collection = AvalonCollection(collection, prod_or_pre=instance)
     current_collection.create_ami_set(output_csv=output_csv, ismemberof=ismemberof)
     print(f"Wrote AMI set to {output_csv}")
+
+
+@cli.command(
+    "replace_metadata", help="Replace metadata on works listed in a CSV"
+)
+@click.option(
+    "--csv",
+    "-c",
+    help="The path to your CSV of replacement metadata",
+    required=True,
+)
+@click.option(
+    "--instance",
+    "-i",
+    help="The Avalon Instance you want",
+    default="pre"
+)
+@click.option(
+    "--dry_run",
+    is_flag=True,
+    help="Report what would change without writing anything to Avalon."
+)
+@click.option(
+    "--report",
+    "-o",
+    help="Where to write the before/after report",
+    default="metadata_replacement_report.csv"
+)
+@click.option(
+    "--backup",
+    "-b",
+    help="Where to write the old values, in the same format, to undo this run",
+    default="metadata_replacement_backup.csv"
+)
+def replace_metadata(csv, instance, dry_run, report, backup):
+    """CSV needs a 'work id' column plus one column per value being set.
+
+    Repeat a column name to give a field several values. Every field named in
+    the CSV is replaced outright; fields not named are left alone.
+    """
+    try:
+        rows = replace_metadata_from_csv(
+            csv,
+            prod_or_pre=instance,
+            dry_run=dry_run,
+            report_csv=report,
+            backup_csv=backup,
+        )
+    except MetadataCsvError as error:
+        raise click.ClickException(str(error))
+
+    changed = sum(1 for row in rows if row["changed"] == "yes")
+    problems = sorted({
+        row["status"] for row in rows
+        if row["status"] not in ("ok", "dry run")
+    })
+    works = len({row["work id"] for row in rows})
+    verb = "would change" if dry_run else "changed"
+    click.echo(f"{works} work(s), {verb} {changed} field value set(s).")
+    click.echo(f"Report: {report}")
+    click.echo(f"Backup: {backup}  (re-run with -c {backup} to undo)")
+    for problem in problems:
+        click.echo(f"  ! {problem}")
 
 
 @cli.command(

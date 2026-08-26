@@ -101,6 +101,52 @@ CSV columns: `media_object_id,path_to_json,path_to_vtts`.
 pyavalon get_json_for_whisper_reviewer -c input.csv -o output.json
 ```
 
+### `replace_metadata`
+
+Replace descriptive metadata on many works at once from a CSV.
+
+The CSV needs a `work id` column plus one column per value you are setting. Repeat a column name to give a field several values, the same way Avalon's own spreadsheets do:
+
+```
+work id,Creator,Date Issued,Contributor,Contributor,Contributor
+nk322d54j,"Appelt, Leslie L.",2000-12-05,"Monroe, Haskell M.",Cushing Memorial Library & Archives,George Bass
+4m90dv76w,"Adkisson, Perry L.",2001-06-23,"Monroe, Haskell M.",Wade Birch,
+b2773w02m,"Albritton, Ford",1998-02-27,,,
+```
+
+The rules:
+
+- **A field is replaced only if its column appears at all.** `Genre` is missing above, so nobody's genres change.
+- **All values for a named field are replaced**, not merged. `nk322d54j` ends up with exactly the three contributors listed.
+- **An all-blank column clears the field.** `b2773w02m` loses its contributors entirely.
+- Replacing a value with the same value is a no-op, and the report marks it unchanged.
+
+Preview a run without writing anything:
+
+```
+pyavalon replace_metadata -c changes.csv -i pre --dry_run
+```
+
+Then apply it:
+
+```
+pyavalon replace_metadata -c changes.csv -i prod
+```
+
+Two files are written either way. `metadata_replacement_report.csv` lists every field with its old value, new value, and whether it actually changed. `metadata_replacement_backup.csv` holds the old values in the same repeated-column format, so a run can be undone by feeding the backup straight back in:
+
+```
+pyavalon replace_metadata -c metadata_replacement_backup.csv -i prod
+```
+
+Supported columns are the Avalon batch-ingest labels: Title, Creator, Contributor, Publisher, Genre, Abstract, Date Created, Date Issued, Copyright Date, Language, Physical Description, Topical Subject, Geographic Subject, Temporal Subject, Terms of Use, Table of Contents, Statement of Responsibility, Series, Comment, Rights Statement, Bibliographic ID, and the paired Note/Note Type, Other Identifier/Other Identifier Type, Related Item URL/Related Item Label. An unrecognized column is an error rather than a silent skip, since a typo'd header would otherwise leave a field untouched while appearing to have been replaced.
+
+#### Two things worth knowing
+
+Avalon rebuilds **Note, Other Identifier, and Related Item URL** on every update whether or not you send them, so a naive update wipes all three. This command reads each work first and sends its existing values back, which is what keeps an unrelated edit non-destructive. The three paired fields must always be given together with their partner column.
+
+Avalon also erases any field that fails validation and still returns HTTP 200, so every write is read back and compared. Anything that did not stick is reported as `NOT APPLIED`. Note that any update sets the work's uploader to `REST API`; that is Avalon's behaviour and cannot be avoided through the API.
+
 ### `create_ami_set`
 
 Builds an AMI set from a collection id.
