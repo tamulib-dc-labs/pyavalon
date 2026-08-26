@@ -87,13 +87,13 @@ pyavalon upload_supplemental_files -c supplementals.csv
 
 Delete every supplemental file of a given type from each master file listed in a CSV.
 
-CSV columns: `file id,type`, where type is `transcript`, `captions`, `audio_description`, `pdf`, or `generic`.
+CSV columns: `file id,type`, where type is `transcript`, `captions`, `audio_description`, or `generic`.
 
 ```
 file id,type
-t722h9075,pdf
+t722h9075,generic
 9593tv433,transcript
-bk128b20t,generic
+bk128b20t,captions
 ```
 
 Preview first:
@@ -112,16 +112,9 @@ pyavalon delete_supplemental_files -c deletions.csv -i prod
 
 #### How types are matched
 
-Avalon has no `pdf` supplemental type. A file's type comes from its tags and is one of `caption`, `transcript`, `audio_description`, or `generic` — and `generic` is the catch-all for anything that is not one of the other three. A PDF, a Word document, and a stray image are indistinguishable in the listing, which carries no content type.
+A file's type comes from its tags, and those four values are the only ones Avalon reports. `generic` is the catch-all for anything that is not a caption, transcript, or description.
 
-So there are two ways to reach that bucket:
-
-| type in your CSV | what it deletes |
-| --- | --- |
-| `pdf` | generic files **confirmed by content** to be PDFs. Anything else is left in place and reported as `skipped`. |
-| `generic` | every generic attachment whatever its format, PDFs included. |
-
-`generic` is a superset of `pdf`, so listing both for one file id is redundant rather than additive. Use `pdf` when you mean PDFs and `generic` when you mean "clear the attachments" — without that distinction, asking to delete PDFs would quietly take every other attachment with it.
+**There is no PDF type.** PDFs are stored as `generic`, alongside every other attachment of that kind, and the listing carries no content type — so a PDF, a Word document, and a stray image are indistinguishable there. `type = generic` deletes all of them whatever their format. If a master file has attachments you want to keep, check the `--dry_run` report before running it.
 
 `audio_description` covers files tagged as descriptions. Note that none were present anywhere in a survey of TAMU's production instance, and its API responses lack the `private` and `forced` fields that current Avalon returns — so that deployment appears to predate them. Worth a `--dry_run` to confirm the type resolves at all before relying on it.
 

@@ -1,13 +1,12 @@
 """
 CSV-driven deletion of supplemental files from Avalon master files.
 
-Avalon has no "pdf" supplemental type. A file's reported type comes from its
-tags and is one of ``caption``, ``transcript``, ``audio_description`` or
-``generic`` -- and ``generic`` is the catch-all for anything that is not one of
-the other three, so a PDF, a Word document and a stray image all look
-identical in the listing. Deleting every ``generic`` file to satisfy a request
-for "pdf" would therefore destroy unrelated attachments, so PDFs are confirmed
-by content type before anything is removed. See ``is_pdf``.
+A file's reported type comes from its tags and is one of ``caption``,
+``transcript``, ``audio_description`` or ``generic``. There is no PDF type:
+``generic`` is the catch-all for anything that is not one of the other three,
+so a PDF, a Word document and a stray image all look identical in the listing,
+which carries no content type. Asking for ``generic`` therefore deletes every
+such attachment whatever its format.
 
 The reported type also collapses a distinction: ``caption`` wins over
 ``transcript``, so a file tagged both reports as ``caption`` with
@@ -20,17 +19,12 @@ import csv
 import re
 from dataclasses import dataclass
 
-PDF_MAGIC = b"%PDF"
-PDF_CONTENT_TYPE = "application/pdf"
-
 # What the operator may write in the "type" column -> canonical request type.
 TYPE_ALIASES = {
     "caption": "caption",
     "captions": "caption",
     "transcript": "transcript",
     "transcripts": "transcript",
-    "pdf": "pdf",
-    "pdfs": "pdf",
     "audio description": "audio_description",
     "audio descriptions": "audio_description",
     "description": "audio_description",
@@ -40,21 +34,13 @@ TYPE_ALIASES = {
     "generics": "generic",
 }
 
-# canonical request type -> the type Avalon reports in supplemental_files.json.
-# 'pdf' and 'generic' both land on Avalon's generic bucket and differ only in
-# whether the file's content is checked first -- see VERIFIED_AS_PDF.
+# canonical request type -> the type Avalon reports in supplemental_files.json
 AVALON_TYPE_FOR = {
     "caption": "caption",
     "transcript": "transcript",
     "audio_description": "audio_description",
-    "pdf": "generic",
     "generic": "generic",
 }
-
-# The one request type whose candidates are confirmed by content before being
-# deleted. 'generic' deliberately skips that check: it means "every generic
-# attachment whatever it is", which necessarily includes the PDFs.
-VERIFIED_AS_PDF = "pdf"
 
 FILE_ID_LABELS = frozenset({"file id", "file", "id", "master file id", "master file"})
 TYPE_LABELS = frozenset({"type", "file type", "supplemental type"})
@@ -131,7 +117,7 @@ def read_deletion_csv(path):
         if requested is None:
             raise SupplementalCsvError(
                 f"row {offset} ({file_id}): {raw_type!r} is not a supported type; "
-                f"use one of: transcript, captions, audio_description, pdf, generic"
+                f"use one of: transcript, captions, audio_description, generic"
             )
 
         key = (file_id, requested)
@@ -150,20 +136,11 @@ def read_deletion_csv(path):
 def select_files(listing, requested_type):
     """Supplemental files matching a requested type, by reported type alone.
 
-    For 'pdf' and 'generic' this returns every generic file. Whether each is
-    really a PDF needs the file's content type, which the listing does not
-    carry, so callers must run 'pdf' candidates through is_pdf before
-    deleting. 'generic' takes them all without asking.
+    'generic' returns every generic file regardless of format, since the
+    listing carries nothing that would distinguish one from another.
     """
     wanted = AVALON_TYPE_FOR[requested_type]
     return [entry for entry in listing if entry.get("type") == wanted]
-
-
-def is_pdf(content_type, first_bytes=b""):
-    """Whether a generic supplemental file is actually a PDF."""
-    if content_type and content_type.split(";")[0].strip().lower() == PDF_CONTENT_TYPE:
-        return True
-    return bool(first_bytes) and first_bytes.startswith(PDF_MAGIC)
 
 
 def describe_overlap(entries):
