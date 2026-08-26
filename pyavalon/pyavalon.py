@@ -1,5 +1,5 @@
 import click
-from pyavalon import AvalonCollection, AvalonSupplementalFile, AvalonMediaObject, AvalonMasterFile, replace_metadata_from_csv, MetadataCsvError
+from pyavalon import AvalonCollection, AvalonSupplementalFile, AvalonMediaObject, AvalonMasterFile, replace_metadata_from_csv, delete_supplemental_files_from_csv, MetadataCsvError, SupplementalCsvError
 from pprint import pprint
 from csv import DictWriter, DictReader
 import os
@@ -351,6 +351,74 @@ def upload_supplemental_files(instance, csv):
                     type="transcript", 
                     label=row['label']
                 )
+
+@cli.command(
+    "delete_supplemental_files", help="Delete all supplemental files of a type from files listed in a CSV"
+)
+@click.option(
+    "--csv",
+    "-c",
+    help="The path to your CSV of file ids and types",
+    required=True,
+)
+@click.option(
+    "--instance",
+    "-i",
+    help="The Avalon Instance you want",
+    default="pre"
+)
+@click.option(
+    "--dry_run",
+    is_flag=True,
+    help="Report what would be deleted without deleting anything."
+)
+@click.option(
+    "--backup_directory",
+    "-b",
+    help="Where to save each file before it is deleted",
+    default="deleted_supplemental_files"
+)
+@click.option(
+    "--skip_backup",
+    is_flag=True,
+    help="Delete without saving a copy first. Deletion cannot be undone."
+)
+@click.option(
+    "--report",
+    "-o",
+    help="Where to write the report of what was deleted",
+    default="supplemental_deletion_report.csv"
+)
+def delete_supplemental_files(csv, instance, dry_run, backup_directory, skip_backup, report):
+    """CSV needs a 'file id' column and a 'type' column.
+
+    Type is transcript, captions, or pdf. Every supplemental file of that type
+    on that master file is deleted.
+    """
+    try:
+        rows = delete_supplemental_files_from_csv(
+            csv,
+            prod_or_pre=instance,
+            dry_run=dry_run,
+            backup_directory=backup_directory,
+            skip_backup=skip_backup,
+            report_csv=report,
+        )
+    except SupplementalCsvError as error:
+        raise click.ClickException(str(error))
+
+    tally = {}
+    for row in rows:
+        tally[row["action"]] = tally.get(row["action"], 0) + 1
+    for action in sorted(tally):
+        click.echo(f"{tally[action]:>5}  {action}")
+    click.echo(f"Report: {report}")
+    if not dry_run and not skip_backup:
+        click.echo(f"Backups: {backup_directory}")
+    for row in rows:
+        if row["action"] in ("error", "skipped"):
+            click.echo(f"  ! {row['file id']}/{row['supplemental id']}: {row['detail']}")
+
 
 @cli.command(
     "find_files_missing_supplementals", help="Find all master files in a collection that are missing a particular file type"

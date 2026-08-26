@@ -83,6 +83,40 @@ CSV columns: `id,filename,label,type` (`type` is one of `pdf`, `caption`, or `tr
 pyavalon upload_supplemental_files -c supplementals.csv
 ```
 
+### `delete_supplemental_files`
+
+Delete every supplemental file of a given type from each master file listed in a CSV.
+
+CSV columns: `file id,type`, where type is `transcript`, `captions`, or `pdf`.
+
+```
+file id,type
+t722h9075,pdf
+9593tv433,transcript
+```
+
+Preview first:
+
+```
+pyavalon delete_supplemental_files -c deletions.csv -i pre --dry_run
+```
+
+Then run it:
+
+```
+pyavalon delete_supplemental_files -c deletions.csv -i prod
+```
+
+**Deletion cannot be undone through the API**, so every file is downloaded to `deleted_supplemental_files/` before it is removed. If the download fails, nothing is deleted. `--skip_backup` turns that off. A report of every file considered, with its content type and what happened to it, is written to `supplemental_deletion_report.csv`.
+
+#### How types are matched
+
+Avalon has no `pdf` supplemental type. A file's type comes from its tags and is one of `caption`, `transcript`, `audio_description`, or `generic` — and `generic` is the catch-all for anything that is not one of the other three. A PDF, a Word document, and a stray image are indistinguishable in the listing, which carries no content type.
+
+So `type = pdf` selects generic files and then **fetches each one to confirm it is really a PDF** before deleting. A generic file that turns out to be something else is left in place and reported as `skipped`. Without that check, asking to delete PDFs would quietly delete every other attachment too.
+
+One more wrinkle worth knowing: `caption` outranks `transcript`, so a file tagged both reports as `caption` with `treat_as_transcript` set. Deleting captions removes those files; deleting transcripts does not. Matching is on the reported type exactly, and any dual-tagged file caught by a caption deletion is flagged in the report as `also tagged transcript`.
+
 ### `find_files_missing_supplementals`
 
 Find all master files in a collection missing a given supplemental file type (`caption`, `transcript`, or `pdf`).

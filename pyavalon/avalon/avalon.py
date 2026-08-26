@@ -18,6 +18,12 @@ from .metadata import (
     read_replacement_csv,
     write_repeated_column_csv,
 )
+from .supplementals import (
+    describe_overlap,
+    is_pdf,
+    read_deletion_csv,
+    select_files,
+)
 
 
 def safe_json(obj):
@@ -408,6 +414,41 @@ class AvalonMasterFile(AvalonBase):
         url = f"{self.base}/master_files/{self.identifier}/supplemental_files.json"
         return self.get(url)
 
+    def fetch_supplemental_file(self, supplemental_id, max_bytes=None):
+        """Download a supplemental file's content.
+
+        The JSON representation carries no content type, so the only way to
+        tell a PDF from any other 'generic' attachment is to follow the
+        ActiveStorage redirect and look at what comes back.
+
+        Returns (content_type, content).
+        """
+        url = f"{self.base}/master_files/{self.identifier}/supplemental_files/{supplemental_id}"
+        response = requests.get(url, headers=self.headers, stream=True)
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"could not fetch supplemental file {supplemental_id} on {self.identifier}: "
+                f"{response.status_code}"
+            )
+        content_type = response.headers.get("Content-Type", "")
+        if max_bytes is None:
+            content = response.content
+        else:
+            content = next(response.iter_content(max_bytes), b"")
+            response.close()
+        return content_type, content
+
+    def delete_supplemental_file(self, supplemental_id):
+        """Remove one supplemental file. Avalon answers 204 with no body."""
+        url = f"{self.base}/master_files/{self.identifier}/supplemental_files/{supplemental_id}.json"
+        response = requests.delete(url, headers=self.headers)
+        if response.status_code not in (200, 202, 204):
+            raise RuntimeError(
+                f"{self.identifier}/{supplemental_id}: Avalon returned "
+                f"{response.status_code} -- {response.text[:300]}"
+            )
+        return response
+
 
 class AvalonSupplementalFile(AvalonBase):
     def __init__(self, fedora_id, prod_or_pre="pre"):
@@ -661,6 +702,139 @@ def replace_metadata_from_csv(
             writer.writeheader()
             writer.writerows(report_rows)
     return report_rows
+
+
+def delete_supplemental_files_from_csv(
+    csv_path,
+    prod_or_pre="pre",
+    dry_run=False,
+    backup_directory="deleted_supplemental_files",
+    skip_backup=False,
+    report_csv="supplemental_deletion_report.csv",
+    verbose=True,
+):
+    """Delete every supplemental file of a given type from each master file.
+
+    The CSV needs a file id column and a type column holding transcript,
+    captions or pdf.
+
+    Deletion cannot be undone through the API, so each file is downloaded to
+    backup_directory before it is removed unless skip_backup is set.
+
+    'pdf' is the awkward one: Avalon stores PDFs as 'generic', which is also
+    what every other non-caption, non-transcript attachment looks like. Each
+    candidate is fetched and checked before deletion, and any generic file
+    that turns out not to be a PDF is left alone and reported.
+    """
+    deletions = read_deletion_csv(csv_path)
+    rows = []
+
+    if not dry_run and not skip_backup:
+        os.makedirs(backup_directory, exist_ok=True)
+
+    for deletion in tqdm(deletions, desc="Deleting supplemental files", disable=not verbose):
+        master = AvalonMasterFile(deletion.file_id, prod_or_pre=prod_or_pre)
+        try:
+            listing = master.get_supplemental_files()
+        except Exception as error:
+            rows.append({
+                "file id": deletion.file_id, "type": deletion.requested_type,
+                "supplemental id": "", "label": "", "content type": "",
+                "action": "error", "detail": f"could not list files: {error}",
+            })
+            continue
+        if not isinstance(listing, list):
+            rows.append({
+                "file id": deletion.file_id, "type": deletion.requested_type,
+                "supplemental id": "", "label": "", "content type": "",
+                "action": "error", "detail": f"unexpected response: {str(listing)[:120]}",
+            })
+            continue
+
+        candidates = select_files(listing, deletion.requested_type)
+        if not candidates:
+            rows.append({
+                "file id": deletion.file_id, "type": deletion.requested_type,
+                "supplemental id": "", "label": "", "content type": "",
+                "action": "nothing to delete", "detail": "",
+            })
+            continue
+
+        overlap = describe_overlap(candidates) if deletion.requested_type == "caption" else []
+
+        for entry in candidates:
+            supplemental_id = entry.get("id")
+            label = entry.get("label") or ""
+            content_type, content, detail = "", None, ""
+
+            # A generic file is only a PDF if its content says so.
+            if deletion.requested_type == "pdf":
+                try:
+                    content_type, content = master.fetch_supplemental_file(supplemental_id)
+                except Exception as error:
+                    rows.append({
+                        "file id": deletion.file_id, "type": deletion.requested_type,
+                        "supplemental id": supplemental_id, "label": label,
+                        "content type": "", "action": "error",
+                        "detail": f"could not verify: {error}",
+                    })
+                    continue
+                if not is_pdf(content_type, content[:8]):
+                    rows.append({
+                        "file id": deletion.file_id, "type": deletion.requested_type,
+                        "supplemental id": supplemental_id, "label": label,
+                        "content type": content_type, "action": "skipped",
+                        "detail": "generic file is not a PDF; left in place",
+                    })
+                    continue
+
+            if overlap and entry.get("treat_as_transcript"):
+                detail = "also tagged transcript"
+
+            if dry_run:
+                rows.append({
+                    "file id": deletion.file_id, "type": deletion.requested_type,
+                    "supplemental id": supplemental_id, "label": label,
+                    "content type": content_type, "action": "would delete", "detail": detail,
+                })
+                continue
+
+            if not skip_backup:
+                try:
+                    if content is None:
+                        content_type, content = master.fetch_supplemental_file(supplemental_id)
+                    target = os.path.join(
+                        backup_directory, f"{deletion.file_id}_{supplemental_id}"
+                    )
+                    with open(target, "wb") as handle:
+                        handle.write(content)
+                except Exception as error:
+                    rows.append({
+                        "file id": deletion.file_id, "type": deletion.requested_type,
+                        "supplemental id": supplemental_id, "label": label,
+                        "content type": content_type, "action": "error",
+                        "detail": f"backup failed, nothing deleted: {error}",
+                    })
+                    continue
+
+            try:
+                master.delete_supplemental_file(supplemental_id)
+            except Exception as error:
+                action, detail = "error", str(error)
+            else:
+                action = "deleted"
+            rows.append({
+                "file id": deletion.file_id, "type": deletion.requested_type,
+                "supplemental id": supplemental_id, "label": label,
+                "content type": content_type, "action": action, "detail": detail,
+            })
+
+    if rows:
+        with open(report_csv, "w", newline="", encoding="utf-8") as handle:
+            writer = DictWriter(handle, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+    return rows
 
 
 if __name__ == "__main__":
