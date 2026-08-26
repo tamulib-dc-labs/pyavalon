@@ -392,8 +392,11 @@ def upload_supplemental_files(instance, csv):
 def delete_supplemental_files(csv, instance, dry_run, backup_directory, skip_backup, report):
     """CSV needs a 'file id' column and a 'type' column.
 
-    Type is transcript, captions, or pdf. Every supplemental file of that type
-    on that master file is deleted.
+    Type is transcript, captions, audio_description, pdf, or generic. Every
+    supplemental file of that type on that master file is deleted.
+
+    'pdf' deletes generic files confirmed to be PDFs. 'generic' deletes every
+    generic attachment whatever its format, PDFs included.
     """
     try:
         rows = delete_supplemental_files_from_csv(

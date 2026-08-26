@@ -19,6 +19,7 @@ from .metadata import (
     write_repeated_column_csv,
 )
 from .supplementals import (
+    VERIFIED_AS_PDF,
     describe_overlap,
     is_pdf,
     read_deletion_csv,
@@ -716,7 +717,7 @@ def delete_supplemental_files_from_csv(
     """Delete every supplemental file of a given type from each master file.
 
     The CSV needs a file id column and a type column holding transcript,
-    captions or pdf.
+    captions, audio_description, pdf, or generic.
 
     Deletion cannot be undone through the API, so each file is downloaded to
     backup_directory before it is removed unless skip_backup is set.
@@ -725,6 +726,10 @@ def delete_supplemental_files_from_csv(
     what every other non-caption, non-transcript attachment looks like. Each
     candidate is fetched and checked before deletion, and any generic file
     that turns out not to be a PDF is left alone and reported.
+
+    'generic' takes the same set without that check -- every generic
+    attachment whatever its format, PDFs included. It is a superset of 'pdf',
+    so asking for both on one file id is redundant, not additive.
     """
     deletions = read_deletion_csv(csv_path)
     rows = []
@@ -767,8 +772,9 @@ def delete_supplemental_files_from_csv(
             label = entry.get("label") or ""
             content_type, content, detail = "", None, ""
 
-            # A generic file is only a PDF if its content says so.
-            if deletion.requested_type == "pdf":
+            # A generic file is only a PDF if its content says so. Only the
+            # 'pdf' request checks; 'generic' means all of them regardless.
+            if deletion.requested_type == VERIFIED_AS_PDF:
                 try:
                     content_type, content = master.fetch_supplemental_file(supplemental_id)
                 except Exception as error:

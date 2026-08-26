@@ -31,14 +31,30 @@ TYPE_ALIASES = {
     "transcripts": "transcript",
     "pdf": "pdf",
     "pdfs": "pdf",
+    "audio description": "audio_description",
+    "audio descriptions": "audio_description",
+    "description": "audio_description",
+    "descriptions": "audio_description",
+    "audio": "audio_description",
+    "generic": "generic",
+    "generics": "generic",
 }
 
-# canonical request type -> the type Avalon reports in supplemental_files.json
+# canonical request type -> the type Avalon reports in supplemental_files.json.
+# 'pdf' and 'generic' both land on Avalon's generic bucket and differ only in
+# whether the file's content is checked first -- see VERIFIED_AS_PDF.
 AVALON_TYPE_FOR = {
     "caption": "caption",
     "transcript": "transcript",
+    "audio_description": "audio_description",
     "pdf": "generic",
+    "generic": "generic",
 }
+
+# The one request type whose candidates are confirmed by content before being
+# deleted. 'generic' deliberately skips that check: it means "every generic
+# attachment whatever it is", which necessarily includes the PDFs.
+VERIFIED_AS_PDF = "pdf"
 
 FILE_ID_LABELS = frozenset({"file id", "file", "id", "master file id", "master file"})
 TYPE_LABELS = frozenset({"type", "file type", "supplemental type"})
@@ -115,7 +131,7 @@ def read_deletion_csv(path):
         if requested is None:
             raise SupplementalCsvError(
                 f"row {offset} ({file_id}): {raw_type!r} is not a supported type; "
-                f"use one of: transcript, captions, pdf"
+                f"use one of: transcript, captions, audio_description, pdf, generic"
             )
 
         key = (file_id, requested)
@@ -134,9 +150,10 @@ def read_deletion_csv(path):
 def select_files(listing, requested_type):
     """Supplemental files matching a requested type, by reported type alone.
 
-    For 'pdf' this returns every generic file; whether each is really a PDF is
-    a separate question that needs the file's content type, which the listing
-    does not carry. Callers must run those through is_pdf before deleting.
+    For 'pdf' and 'generic' this returns every generic file. Whether each is
+    really a PDF needs the file's content type, which the listing does not
+    carry, so callers must run 'pdf' candidates through is_pdf before
+    deleting. 'generic' takes them all without asking.
     """
     wanted = AVALON_TYPE_FOR[requested_type]
     return [entry for entry in listing if entry.get("type") == wanted]

@@ -87,12 +87,13 @@ pyavalon upload_supplemental_files -c supplementals.csv
 
 Delete every supplemental file of a given type from each master file listed in a CSV.
 
-CSV columns: `file id,type`, where type is `transcript`, `captions`, or `pdf`.
+CSV columns: `file id,type`, where type is `transcript`, `captions`, `audio_description`, `pdf`, or `generic`.
 
 ```
 file id,type
 t722h9075,pdf
 9593tv433,transcript
+bk128b20t,generic
 ```
 
 Preview first:
@@ -113,7 +114,16 @@ pyavalon delete_supplemental_files -c deletions.csv -i prod
 
 Avalon has no `pdf` supplemental type. A file's type comes from its tags and is one of `caption`, `transcript`, `audio_description`, or `generic` — and `generic` is the catch-all for anything that is not one of the other three. A PDF, a Word document, and a stray image are indistinguishable in the listing, which carries no content type.
 
-So `type = pdf` selects generic files and then **fetches each one to confirm it is really a PDF** before deleting. A generic file that turns out to be something else is left in place and reported as `skipped`. Without that check, asking to delete PDFs would quietly delete every other attachment too.
+So there are two ways to reach that bucket:
+
+| type in your CSV | what it deletes |
+| --- | --- |
+| `pdf` | generic files **confirmed by content** to be PDFs. Anything else is left in place and reported as `skipped`. |
+| `generic` | every generic attachment whatever its format, PDFs included. |
+
+`generic` is a superset of `pdf`, so listing both for one file id is redundant rather than additive. Use `pdf` when you mean PDFs and `generic` when you mean "clear the attachments" — without that distinction, asking to delete PDFs would quietly take every other attachment with it.
+
+`audio_description` covers files tagged as descriptions. Note that none were present anywhere in a survey of TAMU's production instance, and its API responses lack the `private` and `forced` fields that current Avalon returns — so that deployment appears to predate them. Worth a `--dry_run` to confirm the type resolves at all before relying on it.
 
 One more wrinkle worth knowing: `caption` outranks `transcript`, so a file tagged both reports as `caption` with `treat_as_transcript` set. Deleting captions removes those files; deleting transcripts does not. Matching is on the reported type exactly, and any dual-tagged file caught by a caption deletion is flagged in the report as `also tagged transcript`.
 

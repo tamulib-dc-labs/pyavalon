@@ -62,6 +62,36 @@ class TestReadDeletionCsv(unittest.TestCase):
             finally:
                 os.unlink(path)
 
+    def test_audio_description_spellings(self):
+        for spelling in ("audio_description", "Audio Description", "description",
+                         "descriptions", "audio"):
+            path = write_csv(f"file id,type\nabc123,{spelling}\n")
+            try:
+                row = read_deletion_csv(path)[0]
+            finally:
+                os.unlink(path)
+            self.assertEqual(row.requested_type, "audio_description", spelling)
+            self.assertEqual(row.avalon_type, "audio_description", spelling)
+
+    def test_generic_maps_to_generic(self):
+        path = write_csv("file id,type\nabc123,generic\n")
+        try:
+            row = read_deletion_csv(path)[0]
+        finally:
+            os.unlink(path)
+        self.assertEqual(row.requested_type, "generic")
+        self.assertEqual(row.avalon_type, "generic")
+
+    def test_pdf_and_generic_are_distinct_requests(self):
+        # both target Avalon's generic bucket but differ in verification
+        path = write_csv("file id,type\nabc123,pdf\nabc123,generic\n")
+        try:
+            rows = read_deletion_csv(path)
+        finally:
+            os.unlink(path)
+        self.assertEqual([r.requested_type for r in rows], ["pdf", "generic"])
+        self.assertEqual({r.avalon_type for r in rows}, {"generic"})
+
     def test_unknown_type_is_refused(self):
         path = write_csv("file id,type\nabc123,thumbnail\n")
         try:
@@ -120,6 +150,23 @@ class TestSelection(unittest.TestCase):
         self.assertTrue(is_pdf("application/octet-stream", b"%PDF-1.4"))
         self.assertFalse(is_pdf("text/vtt", b"WEBVTT"))
         self.assertFalse(is_pdf("", b""))
+
+    def test_audio_description_selects_only_that_type(self):
+        listing = LISTING + [
+            {"id": 900, "type": "audio_description", "label": "Described audio",
+             "treat_as_transcript": False},
+        ]
+        self.assertEqual(
+            [e["id"] for e in select_files(listing, "audio_description")], [900]
+        )
+        # and it must not be swept up by the generic bucket
+        self.assertEqual([e["id"] for e in select_files(listing, "generic")], [7598])
+
+    def test_generic_selects_the_same_candidates_as_pdf(self):
+        self.assertEqual(
+            [e["id"] for e in select_files(LISTING, "generic")],
+            [e["id"] for e in select_files(LISTING, "pdf")],
+        )
 
     def test_describe_overlap_names_dual_tagged_files(self):
         entries = [
@@ -195,6 +242,43 @@ class TestDeletionDriver(unittest.TestCase):
         self.assertTrue(os.path.exists(saved))
         with open(saved, "rb") as handle:
             self.assertEqual(handle.read(), b"%PDF-1.4 body")
+
+    def test_generic_deletes_a_non_pdf_that_pdf_would_skip(self):
+        listing = [{"id": 7598, "type": "generic", "label": "Notes.docx",
+                    "treat_as_transcript": False}]
+        self.CONTENT[7598] = ("application/vnd.openxmlformats-officedocument", b"PK\x03\x04")
+        try:
+            rows = self.run_driver(
+                csv_text="file id,type\nt722h9075,generic\n", listing=listing
+            )
+        finally:
+            self.CONTENT[7598] = ("application/pdf", b"%PDF-1.4 body")
+        self.assertEqual(self.deleted, [("t722h9075", 7598)])
+        self.assertEqual(rows[0]["action"], "deleted")
+
+    def test_generic_still_backs_up_before_deleting(self):
+        self.run_driver(csv_text="file id,type\nt722h9075,generic\n")
+        self.assertTrue(os.path.exists(os.path.join(self.backups, "t722h9075_7598")))
+
+    def test_audio_description_is_deleted(self):
+        listing = [{"id": 900, "type": "audio_description", "label": "Described audio",
+                    "treat_as_transcript": False}]
+        self.CONTENT[900] = ("audio/mpeg", b"ID3\x03")
+        rows = self.run_driver(
+            csv_text="file id,type\nt722h9075,audio_description\n", listing=listing
+        )
+        self.assertEqual(self.deleted, [("t722h9075", 900)])
+        self.assertEqual(rows[0]["action"], "deleted")
+
+    def test_audio_description_is_not_content_checked(self):
+        # no PDF verification should apply, whatever the bytes look like
+        listing = [{"id": 900, "type": "audio_description", "label": "Described audio",
+                    "treat_as_transcript": False}]
+        self.CONTENT[900] = ("audio/mpeg", b"not a pdf at all")
+        self.run_driver(
+            csv_text="file id,type\nt722h9075,audio_description\n", listing=listing
+        )
+        self.assertEqual(self.deleted, [("t722h9075", 900)])
 
     def test_dry_run_deletes_nothing_and_writes_no_backups(self):
         rows = self.run_driver(dry_run=True)
