@@ -7,6 +7,7 @@ from pyavalon.avalon.metadata import (
     diff_fields,
     preserve_paired_fields,
     read_replacement_csv,
+    write_repeated_column_csv,
 )
 
 FIXTURE = os.path.join("fixtures", "metadata-replacement.csv")
@@ -72,6 +73,75 @@ class TestTicketExample(unittest.TestCase):
         report = diff_fields(current, self.updates["nk322d54j"].fields)
         self.assertFalse(report["date_issued"][2])
         self.assertTrue(report["creator"][2])
+
+
+class TestUnquotedCommaDetection(unittest.TestCase):
+    """A name whose comma was left unquoted is valid CSV saying the wrong
+    thing, so it has to be refused rather than silently split."""
+
+    def test_quoted_name_with_a_comma_stays_one_value(self):
+        path = write_csv(
+            'work id,Contributor,Contributor\n'
+            'p2676v80j,"Lane, Daryl","Crews, David"\n'
+        )
+        try:
+            fields = read_replacement_csv(path)[0].fields
+        finally:
+            os.unlink(path)
+        self.assertEqual(fields["contributor"], ["Lane, Daryl", "Crews, David"])
+
+    def test_unquoted_comma_that_keeps_row_width_is_refused(self):
+        # 5 header cells, 5 data cells -- structurally fine, semantically wrong
+        path = write_csv(
+            "work id,Contributor,Contributor,Contributor,Contributor\n"
+            "p2676v80j,Lane, Daryl,Crews, David\n"
+        )
+        try:
+            with self.assertRaises(MetadataCsvError) as caught:
+                read_replacement_csv(path)
+        finally:
+            os.unlink(path)
+        message = str(caught.exception)
+        self.assertIn("Lane, Daryl", message)
+        self.assertIn("begins with a space", message)
+
+    def test_unquoted_comma_that_overflows_the_header_is_refused(self):
+        path = write_csv(
+            "work id,Contributor,Contributor\n"
+            "p2676v80j,Lane, Daryl,Crews, David\n"
+        )
+        try:
+            with self.assertRaises(MetadataCsvError) as caught:
+                read_replacement_csv(path)
+        finally:
+            os.unlink(path)
+        self.assertIn("cells but the header has", str(caught.exception))
+
+    def test_trailing_empty_cells_are_not_an_overflow(self):
+        path = write_csv("work id,Creator\nabc123,A,,\n")
+        try:
+            self.assertEqual(read_replacement_csv(path)[0].fields["creator"], ["A"])
+        finally:
+            os.unlink(path)
+
+    def test_single_valued_field_is_not_comma_checked(self):
+        # date_issued takes one value; a space there cannot mean a split name
+        path = write_csv("work id,Abstract\nabc123, padded abstract\n")
+        try:
+            self.assertEqual(
+                read_replacement_csv(path)[0].fields["abstract"], "padded abstract"
+            )
+        finally:
+            os.unlink(path)
+
+    def test_backup_output_round_trips_names_containing_commas(self):
+        records = [("p2676v80j", {"contributor": ["Lane, Daryl", "Crews, David"]})]
+        path = os.path.join(tempfile.mkdtemp(), "backup.csv")
+        write_repeated_column_csv(path, records)
+        self.assertEqual(
+            read_replacement_csv(path)[0].fields["contributor"],
+            ["Lane, Daryl", "Crews, David"],
+        )
 
 
 class TestPairedFieldPreservation(unittest.TestCase):
