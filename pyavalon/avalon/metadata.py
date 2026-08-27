@@ -167,6 +167,49 @@ def _cell(row, index):
     return row[index].strip() if index < len(row) else ""
 
 
+def _check_row_shape(row, header_width, groups, offset):
+    """Catch a name whose comma was left unquoted.
+
+    "Lane, Daryl" written without quotes is two cells as far as CSV is
+    concerned, and there is no way to recover the intent afterwards -- so the
+    only safe thing is to refuse the file. Two signals give it away.
+
+    The first is a row wider than its header: the split pushed cells off the
+    end, and they would otherwise be read past every column group and silently
+    dropped.
+
+    The second is a value with leading whitespace. A quoted "Lane, Daryl"
+    arrives intact, but an unquoted one splits at ", " and leaves the second
+    half beginning with a space. Properly written files do not have that --
+    spreadsheet exports quote instead of padding.
+    """
+    overflow = [value for value in row[header_width:] if value.strip()]
+    if overflow:
+        raise MetadataCsvError(
+            f"row {offset} has {len(row)} cells but the header has {header_width}; "
+            f"stray value(s) {', '.join(repr(v) for v in overflow[:3])}. A name containing "
+            f"a comma must be quoted, e.g. \"Lane, Daryl\""
+        )
+
+    for api_field, indices in groups.items():
+        if not FIELD_CARDINALITY.get(api_field):
+            continue
+        for position, index in enumerate(indices):
+            if index >= len(row):
+                continue
+            raw = row[index]
+            if raw and raw[:1].isspace() and raw.strip():
+                previous = row[indices[position - 1]].strip() if position else ""
+                joined = f"{previous},{raw}" if previous else raw
+                raise MetadataCsvError(
+                    f"row {offset}, {CANONICAL_LABELS.get(api_field, api_field)} column "
+                    f"{index + 1}: {raw!r} begins with a space, which usually means a name "
+                    f"containing a comma was left unquoted (reading {joined.strip()!r} as two "
+                    f"values). Quote it as \"{joined.strip()}\", or remove the padding if the "
+                    f"split is intended"
+                )
+
+
 def read_replacement_csv(path):
     """Parse a replacement CSV into a list of WorkUpdate rows.
 
@@ -199,6 +242,7 @@ def read_replacement_csv(path):
                 f"must appear once so the replacement is unambiguous"
             )
         seen[work_id] = offset
+        _check_row_shape(row, len(rows[0]), groups, offset)
 
         fields = {}
         for api_field, indices in groups.items():

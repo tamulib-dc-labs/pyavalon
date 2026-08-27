@@ -178,6 +178,25 @@ pyavalon replace_metadata -c metadata_replacement_backup.csv -i prod
 
 Supported columns are the Avalon batch-ingest labels: Title, Creator, Contributor, Publisher, Genre, Abstract, Date Created, Date Issued, Copyright Date, Language, Physical Description, Topical Subject, Geographic Subject, Temporal Subject, Terms of Use, Table of Contents, Statement of Responsibility, Series, Comment, Rights Statement, Bibliographic ID, and the paired Note/Note Type, Other Identifier/Other Identifier Type, Related Item URL/Related Item Label. An unrecognized column is an error rather than a silent skip, since a typo'd header would otherwise leave a field untouched while appearing to have been replaced.
 
+#### One value per column, and quote your commas
+
+Each value gets its own column. Values are never split on `;` or any other delimiter, so putting several names in one cell gives you one long name, not several:
+
+```
+work id,Contributor
+p2676v80j,"Lane, Daryl; Crews, David"        <- ONE contributor
+```
+
+And because inverted names contain commas, they have to be quoted:
+
+```
+work id,Contributor,Contributor
+p2676v80j,"Lane, Daryl","Crews, David"       <- correct, two contributors
+p2676v80j,Lane, Daryl,Crews, David           <- refused
+```
+
+The unquoted version is valid CSV that happens to mean something else — four values, `Lane`, `Daryl`, `Crews`, `David`. That is caught and refused rather than written, but the check is a heuristic on the shape of the row, so the reliable fix is to let a spreadsheet or `csv.writer` do the quoting for you. The backup file this command generates is always written that way, which is part of why it round-trips.
+
 #### Two things worth knowing
 
 Avalon rebuilds **Note, Other Identifier, and Related Item URL** on every update whether or not you send them, so a naive update wipes all three. This command reads each work first and sends its existing values back, which is what keeps an unrelated edit non-destructive. The three paired fields must always be given together with their partner column.
