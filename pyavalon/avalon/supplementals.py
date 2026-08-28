@@ -157,7 +157,10 @@ def delete_supplemental_files(
         })
         if verbose:
             where = f"{work_id}/{master_file}" if master_file else work_id
-            what = f" {supplemental} ({label})" if supplemental != "" else ""
+            # Name the matched type, not just the label. A generic file can be
+            # labelled "Transcript in English", and printing the label alone
+            # made a generic sweep read as though it had deleted transcripts.
+            what = f" {file_type} #{supplemental} {label!r} --" if supplemental != "" else ""
             print(f"{where}:{what} {status}")
 
     for _row_number, work_id, file_type in rows:

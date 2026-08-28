@@ -13,13 +13,10 @@ venv/
 .env
 .env.local
 
-# Reports and files the commands write into the working directory
-metadata_replacement_report.csv
-supplemental_deletion_report.csv
-metadata_replacement_backup.csv
-ami_set.csv
-corina.csv
-output.csv
+# Reports the commands write, and the ad-hoc CSVs you feed them, which both
+# land in whatever directory you run from. Only the repo root is ignored --
+# the CSVs under fixtures/ are test data and stay tracked.
+/*.csv
 output.json
 collection.json
 example.json

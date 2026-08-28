@@ -160,6 +160,23 @@ class TestDeleteSupplementalFiles(unittest.TestCase):
         self.assertEqual(rows[0]["label"], "Program notes.pdf")
         self.assertEqual(rows[0]["deleted"], "yes")
 
+    def test_output_names_the_matched_type_not_just_the_label(self):
+        """A generic file can be labelled "Transcript in English"; printing the
+        label alone made a generic sweep read as though it deleted transcripts."""
+        self.listing = {"mf1": [{"id": 9, "type": "generic", "label": "Transcript in English"}],
+                        "mf2": []}
+        import io as _io
+        from contextlib import redirect_stdout
+        buffer = _io.StringIO()
+        with redirect_stdout(buffer):
+            delete_supplemental_files(write_csv("work id,type\nw1,generic\n"),
+                                      instance="pre", report_path=None, verbose=True)
+        line = buffer.getvalue()
+        self.assertIn("generic", line)
+        self.assertIn("Transcript in English", line)
+        self.assertLess(line.index("generic"), line.index("Transcript in English"),
+                        "the matched type must come before the label")
+
     def test_dry_run_deletes_nothing_but_still_reports(self):
         records = self.run_csv("work id,type\nw1,generic\n", dry_run=True)
         self.assertEqual(self.deleted, [])

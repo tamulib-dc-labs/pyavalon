@@ -315,7 +315,11 @@ def delete_supplemental_files(csv, instance, output_csv, dry_run):
         raise click.ClickException(str(error))
     matched = [record for record in records if record["supplemental id"] != ""]
     verb = "Would delete" if dry_run else "Deleted"
-    print(f"{verb} {len(matched)} file(s) across {len({r['work id'] for r in records})} work(s)")
+    # Name the types actually matched -- a label can say "Transcript" on a file
+    # whose type is generic, so the count alone is easy to misread.
+    kinds = "/".join(sorted({record["type"] for record in matched})) or "matching"
+    print(f"{verb} {len(matched)} {kinds} file(s) across "
+          f"{len({r['work id'] for r in records})} work(s)")
 
 
 @cli.command(
