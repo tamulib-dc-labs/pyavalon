@@ -1,1 +1,48 @@
+# Python
 **/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Credentials -- never commit these
+.env
+.env.local
+
+# Reports and files the commands write into the working directory
+metadata_replacement_report.csv
+supplemental_deletion_report.csv
+metadata_replacement_backup.csv
+ami_set.csv
+corina.csv
+output.csv
+output.json
+collection.json
+example.json
+example_file.json
+media_object.json
+sci-fi-radio.json
+
+# Downloaded derivatives (get_file_ids_from_a_collection --download, download_best_files)
+tmp/
+*.mp3
+*.mp4
+
+# Captions and transcripts pulled down from Avalon, and any backups made before
+# a destructive run. The three under fixtures/ are test data and must stay.
+*.vtt
+!fixtures/*.vtt
+*.srt
+*.bak
+*.orig
+
+# Editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
