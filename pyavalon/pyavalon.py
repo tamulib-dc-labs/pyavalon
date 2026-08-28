@@ -269,14 +269,22 @@ def replace_metadata(csv, instance, dry_run, report, backup):
     except MetadataCsvError as error:
         raise click.ClickException(str(error))
 
-    changed = sum(1 for row in rows if row["changed"] == "yes")
+    # Count only what actually landed. A field can be "changed" in the diff and
+    # still never reach Avalon if the write failed, so the two are not the same.
+    applied = sum(
+        1 for row in rows
+        if row["changed"] == "yes" and row["status"] in ("ok", "dry run")
+    )
     problems = sorted({
         row["status"] for row in rows
         if row["status"] not in ("ok", "dry run")
     })
     works = len({row["work id"] for row in rows})
+    failed = len({row["work id"] for row in rows if row["status"] not in ("ok", "dry run")})
     verb = "would change" if dry_run else "changed"
-    click.echo(f"{works} work(s), {verb} {changed} field value set(s).")
+    click.echo(f"{works} work(s), {verb} {applied} field value set(s).")
+    if failed:
+        click.echo(f"{failed} work(s) FAILED and were not modified:")
     click.echo(f"Report: {report}")
     click.echo(f"Backup: {backup}  (re-run with -c {backup} to undo)")
     for problem in problems:

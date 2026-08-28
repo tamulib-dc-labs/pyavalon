@@ -1,5 +1,6 @@
 import requests
 import os
+import time
 from tqdm import tqdm
 import math
 import subprocess
@@ -13,8 +14,8 @@ import uuid
 from iiif_prezi3 import Collection
 from .metadata import (
     PAIRED_FIELDS,
+    build_update_payload,
     diff_fields,
-    preserve_paired_fields,
     read_replacement_csv,
     write_repeated_column_csv,
 )
@@ -34,6 +35,33 @@ def safe_json(obj):
 
 
 class AvalonBase:
+    # Avalon intermittently refuses a request it will accept moments later --
+    # 502s while a backend is restarting, and 422s carrying no error detail for
+    # payloads that succeed on retry. Every write here sends absolute values
+    # rather than deltas, so repeating one is harmless.
+    TIMEOUT = 60
+    RETRY_ON = frozenset({422, 500, 502, 503, 504})
+    ATTEMPTS = 4
+
+    def _send(self, method, url, **kwargs):
+        """Issue a request, retrying the statuses Avalon returns spuriously."""
+        kwargs.setdefault("timeout", self.TIMEOUT)
+        headers = {**self.headers, **kwargs.pop("headers", {})}
+        last = None
+        for attempt in range(1, self.ATTEMPTS + 1):
+            try:
+                response = requests.request(method, url, headers=headers, **kwargs)
+            except requests.RequestException as error:
+                last = error
+                if attempt == self.ATTEMPTS:
+                    raise
+            else:
+                if response.status_code not in self.RETRY_ON or attempt == self.ATTEMPTS:
+                    return response
+                last = response
+            time.sleep(min(2 ** attempt, 10))
+        return last
+
     def __init__(self, prod_or_pre="pre"):
         self.key = self.__get_key(prod_or_pre)
         self.headers = {
@@ -56,9 +84,9 @@ class AvalonBase:
             return "https://avalon-pre.library.tamu.edu"
         
     def get(self, url):
-        response = requests.get(
-            url, headers=self.headers
-        )
+        # Retried and bounded: without a timeout a stalled Avalon hung the CLI
+        # indefinitely instead of reporting anything.
+        response = self._send("GET", url)
         return response.json()
     
     def add_supplemental_file(self, url, file_path, filename=None):
@@ -376,12 +404,15 @@ class AvalonMediaObject(AvalonBase):
         exactly what it is given.
         """
         url = f"{self.base}/media_objects/{self.identifier}.json"
-        headers = self.headers.copy()
-        headers['Content-Type'] = 'application/json'
-        response = requests.put(url, json={"fields": fields}, headers=headers)
+        response = self._send(
+            "PUT", url,
+            json={"fields": fields},
+            headers={**self.headers, "Content-Type": "application/json"},
+        )
         if response.status_code not in (200, 201):
             raise RuntimeError(
-                f"{self.identifier}: Avalon returned {response.status_code} -- {response.text[:300]}"
+                f"{self.identifier}: Avalon returned {response.status_code} after "
+                f"{self.ATTEMPTS} attempts -- {response.text[:200]}"
             )
         return response
 
@@ -663,7 +694,7 @@ def replace_metadata_from_csv(
             backup_fields.setdefault(partner, current.get(partner))
         backup_records.append((update.work_id, backup_fields))
 
-        payload = preserve_paired_fields(update.fields, current)
+        payload = build_update_payload(update.fields, current)
         changes = diff_fields(current, update.fields)
 
         if dry_run:

@@ -4,6 +4,7 @@ import unittest
 
 from pyavalon.avalon.metadata import (
     MetadataCsvError,
+    build_update_payload,
     diff_fields,
     preserve_paired_fields,
     read_replacement_csv,
@@ -117,6 +118,25 @@ class TestUnquotedCommaDetection(unittest.TestCase):
             os.unlink(path)
         self.assertIn("cells but the header has", str(caught.exception))
 
+    def test_padded_multi_word_value_is_accepted(self):
+        # Avalon's own data carries values like " U.S. Advertising Council" and
+        # " Country music". Refusing those broke the backup file's round trip,
+        # which is the undo path -- worse than the problem being guarded against.
+        path = write_csv(
+            "work id,Contributor,Contributor,Genre,Genre\n"
+            "pk02c9724,United States. Department of Agriculture., U.S. Advertising Council,"
+            "Folk music, Country music\n"
+        )
+        try:
+            fields = read_replacement_csv(path)[0].fields
+        finally:
+            os.unlink(path)
+        self.assertEqual(
+            fields["contributor"],
+            ["United States. Department of Agriculture.", "U.S. Advertising Council"],
+        )
+        self.assertEqual(fields["genre"], ["Folk music", "Country music"])
+
     def test_trailing_empty_cells_are_not_an_overflow(self):
         path = write_csv("work id,Creator\nabc123,A,,\n")
         try:
@@ -181,6 +201,35 @@ class TestPairedFieldPreservation(unittest.TestCase):
         new_fields = {"creator": ["X"]}
         preserve_paired_fields(new_fields, {"note": ["a"], "note_type": ["general"]})
         self.assertEqual(new_fields, {"creator": ["X"]})
+
+
+class TestRequiredTitle(unittest.TestCase):
+    """Avalon's REST API documents title as required on update."""
+
+    def test_title_is_carried_over_when_the_csv_does_not_set_it(self):
+        payload = build_update_payload(
+            {"creator": ["X"]}, {"title": "Existing Title", "creator": ["Old"]}
+        )
+        self.assertEqual(payload["title"], "Existing Title")
+
+    def test_a_title_in_the_csv_wins(self):
+        payload = build_update_payload(
+            {"title": "New Title"}, {"title": "Existing Title"}
+        )
+        self.assertEqual(payload["title"], "New Title")
+
+    def test_missing_current_title_becomes_empty_rather_than_absent(self):
+        payload = build_update_payload({"creator": ["X"]}, {})
+        self.assertIn("title", payload)
+        self.assertEqual(payload["title"], "")
+
+    def test_paired_fields_are_still_preserved(self):
+        payload = build_update_payload(
+            {"creator": ["X"]},
+            {"title": "T", "note": ["n"], "note_type": ["general"]},
+        )
+        self.assertEqual(payload["note"], ["n"])
+        self.assertEqual(payload["note_type"], ["general"])
 
 
 class TestPairedColumnParsing(unittest.TestCase):
@@ -294,6 +343,7 @@ class TestReplaceMetadataFromCsv(unittest.TestCase):
     """The driver, with the network mocked out."""
 
     EXISTING = {
+        "title": "Thomas Adair: Oral History Interview",
         "creator": ["Adair, Thomas W."],
         "date_issued": "2000-12-05",
         "contributor": ["Monroe, Haskell M., Jr. (Haskell Moorman), 1931-2017"],
@@ -347,6 +397,13 @@ class TestReplaceMetadataFromCsv(unittest.TestCase):
         self.run_driver()
         # Genre has no column, so it must never reach Avalon
         self.assertNotIn("genre", self.sent["nk322d54j"])
+
+    def test_title_is_always_sent(self):
+        # the API documents title as required on update
+        self.run_driver()
+        self.assertEqual(
+            self.sent["nk322d54j"]["title"], "Thomas Adair: Oral History Interview"
+        )
 
     def test_mentioned_fields_are_replaced(self):
         self.run_driver()

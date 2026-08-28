@@ -195,13 +195,22 @@ def _check_row_shape(row, header_width, groups, offset):
         if not FIELD_CARDINALITY.get(api_field):
             continue
         for position, index in enumerate(indices):
-            if index >= len(row):
+            if index >= len(row) or position == 0:
                 continue
             raw = row[index]
-            if raw and raw[:1].isspace() and raw.strip():
-                previous = row[indices[position - 1]].strip() if position else ""
-                joined = f"{previous},{raw}" if previous else raw
-                raise MetadataCsvError(
+            if not (raw and raw[:1].isspace() and raw.strip()):
+                continue
+            previous = row[indices[position - 1]].strip()
+            # Only an inverted personal name looks like this. Real values that
+            # merely carry padding -- " U.S. Advertising Council", " Country
+            # music" -- are common in Avalon and must not be refused, or the
+            # backup file this tool writes would stop round-tripping. A split
+            # "Lane, Daryl" leaves a bare single token on both sides; a padded
+            # multi-word value does not.
+            if not previous or " " in previous or " " in raw.strip():
+                continue
+            joined = f"{previous},{raw}"
+            raise MetadataCsvError(
                     f"row {offset}, {CANONICAL_LABELS.get(api_field, api_field)} column "
                     f"{index + 1}: {raw!r} begins with a space, which usually means a name "
                     f"containing a comma was left unquoted (reading {joined.strip()!r} as two "
@@ -275,6 +284,22 @@ def read_replacement_csv(path):
     if not updates:
         raise MetadataCsvError("no data rows found")
     return updates
+
+
+def build_update_payload(new_fields, current_fields):
+    """The complete `fields` hash to PUT for one work.
+
+    Avalon's REST API documents `title` as required on update, so it is carried
+    over from the work's current metadata whenever the CSV does not set it.
+    Leaving it out mostly appears to work -- the stored title is not cleared --
+    but the object is then validated without one, and a media object that fails
+    validation on `title` is refused outright rather than having the offending
+    field erased. That is the one failure Avalon will not paper over.
+    """
+    payload = preserve_paired_fields(new_fields, current_fields)
+    if not payload.get("title"):
+        payload["title"] = current_fields.get("title") or ""
+    return payload
 
 
 def preserve_paired_fields(new_fields, current_fields):

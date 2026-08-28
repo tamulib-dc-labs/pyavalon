@@ -1,3 +1,3 @@
 from .avalon import AvalonMediaObject as AvalonMediaObject, AvalonCollection as AvalonCollection, AvalonSupplementalFile as AvalonSupplementalFile, AvalonMasterFile as AvalonMasterFile, replace_metadata_from_csv as replace_metadata_from_csv, delete_supplemental_files_from_csv as delete_supplemental_files_from_csv
-from .metadata import MetadataCsvError as MetadataCsvError, read_replacement_csv as read_replacement_csv, preserve_paired_fields as preserve_paired_fields
+from .metadata import MetadataCsvError as MetadataCsvError, read_replacement_csv as read_replacement_csv, preserve_paired_fields as preserve_paired_fields, build_update_payload as build_update_payload
 from .supplementals import SupplementalCsvError as SupplementalCsvError, read_deletion_csv as read_deletion_csv, select_files as select_files
