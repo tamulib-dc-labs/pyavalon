@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyavalon"
-version = "0.1.14"
+version = "0.1.15"
 description = ""
 authors = ["Mark Baggett <markpbaggett@gmail.com>"]
 readme = "README.md"
@@ -10,7 +10,7 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.11"
 requests = "^2.32.4"
 tqdm = "^4.67.1"
 fpdf = "^1.7.2"

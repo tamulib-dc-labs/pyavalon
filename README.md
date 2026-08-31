@@ -16,6 +16,36 @@ To use as a library, use pip:
 pip install pyavalon
 ```
 
+### Running from source
+
+To work on pyavalon itself, or to run it before it is published, install it into a virtual environment from a clone. On Windows PowerShell:
+
+```powershell
+py -3.11 -m venv .venv
+.venv\Scripts\python.exe -m pip install --upgrade pip
+.venv\Scripts\python.exe -m pip install -e .
+```
+
+On macOS or Linux:
+
+```
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e .
+```
+
+That puts the `pyavalon` command inside the environment:
+
+```powershell
+.venv\Scripts\pyavalon.exe --help
+```
+
+Activate the environment first (`.venv\Scripts\Activate.ps1` on PowerShell, `source .venv/bin/activate` elsewhere) and it is just `pyavalon --help`. The install is editable, so edits to the source take effect without reinstalling.
+
+Python 3.11 or newer is required, and `.venv/` is gitignored.
+
+One caveat on Windows: `weasyprint` installs as a Python package but needs GTK native libraries that a default Windows install does not have. Only `HTMLPDFBuilder` uses it, and it is imported lazily, so every command keeps working without GTK — you will only see the failure if you actually build a PDF.
+
 ## Configuration
 
 Commands talk to either the `pre` (staging) or `prod` Avalon instance, selected with `--instance`/`-i` (default: `pre`). Each instance requires an Avalon API key, set via environment variable:
