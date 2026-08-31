@@ -21,20 +21,92 @@ def safe_json(obj):
     return json.dumps(obj).replace('\\"', '\\u0022')
 
 
+class MissingApiKey(ValueError):
+    """No Avalon API key configured for the chosen instance."""
+
+
+_ENV_FILES_LOADED = False
+
+
+def key_variable_for(prod_or_pre):
+    """Name of the environment variable holding the key for an instance."""
+    return "AVALON_PROD" if prod_or_pre == "prod" else "AVALON_PRE"
+
+
+def load_env_file(directory=None):
+    """
+    Read AVALON_* keys out of a local .env.local / .env, once per process.
+
+    This is a fallback for people who keep their keys in a file. If the key is
+    already in the environment -- set with `export` or `$env:` as before -- the
+    file is never opened; see __get_key. Values already in the environment are
+    left alone here too, so a partially configured shell still wins.
+    """
+    global _ENV_FILES_LOADED
+    if _ENV_FILES_LOADED:
+        return
+    _ENV_FILES_LOADED = True
+
+    directory = directory or os.getcwd()
+    for name in (".env.local", ".env"):
+        path = os.path.join(directory, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8-sig") as env_file:
+                for line in env_file:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    name_part, value = line.split("=", 1)
+                    value = value.strip()
+                    if len(value) > 1 and value[0] == value[-1] and value[0] in "\"'":
+                        value = value[1:-1]
+                    os.environ.setdefault(name_part.strip(), value)
+        except OSError:
+            continue
+
+
 class AvalonBase:
     def __init__(self, prod_or_pre="pre"):
+        self.environment = prod_or_pre
         self.key = self.__get_key(prod_or_pre)
         self.headers = {
             "Avalon-Api-Key": self.key
         }
         self.base = self.__set_prod_or_pre(prod_or_pre)
 
+    @property
+    def key_variable(self):
+        return key_variable_for(self.environment)
+
+    def require_key(self):
+        """
+        Fail with the real reason when no API key is configured.
+
+        Nothing else surfaces it clearly: requests drops a None-valued header,
+        so the call goes out unauthenticated. Reading a published work then
+        succeeds, an admin endpoint returns an HTML login page that blows up as
+        a JSONDecodeError, and a write comes back as a bare 422 "Unprocessable
+        Entity" that names no field.
+        """
+        if not self.key:
+            raise MissingApiKey(
+                f"{self.key_variable} is not set, so requests go out unauthenticated.\n"
+                f'    PowerShell:  $env:{self.key_variable} = "your-api-key"\n'
+                f'    bash:        export {self.key_variable}="your-api-key"'
+            )
+
     @staticmethod
     def __get_key(prod_or_pre):
-        if prod_or_pre == "prod":
-            return os.getenv("AVALON_PROD")
-        else:
-            return os.getenv("AVALON_PRE")
+        variable = key_variable_for(prod_or_pre)
+        key = os.getenv(variable)
+        if key:
+            # Set in the shell, the way it has always worked. Do not go near
+            # any .env file -- it must not shadow or interfere with this.
+            return key
+        load_env_file()
+        return os.getenv(variable)
         
     @staticmethod
     def __set_prod_or_pre(environment):
@@ -44,6 +116,7 @@ class AvalonBase:
             return "https://avalon-pre.library.tamu.edu"
         
     def get(self, url):
+        self.require_key()
         response = requests.get(
             url, headers=self.headers
         )
@@ -53,6 +126,7 @@ class AvalonBase:
         """
         Upload a supplemental file using multipart form data
         """
+        self.require_key()
         if filename is None:
             filename = os.path.basename(file_path)
         
@@ -194,17 +268,17 @@ class AvalonCollection(AvalonBase):
                     "-af", "highpass=f=100, lowpass=f=8000, afftdn, loudnorm",
                     "-acodec", "libmp3lame",
                     "-q:a", "2",
-                    f"{output}/{current.get('work_id')}_{current.get("file_id")}.mp3"
+                    f"{output}/{current.get('work_id')}_{current.get('file_id')}.mp3"
                 ]
                 os.makedirs(output, exist_ok=True)
-                if os.path.exists(f"{output}/{current.get('work_id')}_{current.get("file_id")}.mp3"):
+                if os.path.exists(f"{output}/{current.get('work_id')}_{current.get('file_id')}.mp3"):
                     pass
                 else:
                     try:
                         subprocess.run(command, check=True)
                     except CalledProcessError:
                         # Todo: This needs to be investigated Better Handled
-                        print(f"Failed to download {current.get("file_id")} from {current.get('work_id')}")
+                        print(f"Failed to download {current.get('file_id')} from {current.get('work_id')}")
 
     def get_json(self, json_file):
         response = self.page_items()
@@ -350,6 +424,42 @@ class AvalonMediaObject(AvalonBase):
         with open("example.json", "w") as my_file:
             json.dump(response, my_file, indent=4)
 
+    def update_metadata(self, fields, collection_id=None):
+        """
+        Replace the descriptive metadata on this work.
+
+        The body is `{"collection_id": ..., "fields": {...}}`, matching the
+        documented request:
+        https://samvera.atlassian.net/wiki/spaces/AVALON/pages/1957954917/REST+API
+        Only `fields` is marked REQUIRED there, and an update without
+        `collection_id` does answer 200 and leaves the work where it is -- but
+        the docs' example sends it, so pass the work's current collection when
+        you have it and it is simply omitted when you do not.
+
+        `fields` is the complete fields dict to store, not a patch: Avalon
+        rebuilds note, other_identifier and related_item_url on every update
+        whether or not they were sent, so anything left out of the payload is
+        wiped. Returns the response so the caller can tell a 422 (Avalon
+        refused the values) from a transport failure.
+        """
+        self.require_key()
+
+        url = f"{self.base}/media_objects/{self.identifier}.json"
+
+        headers = self.headers.copy()
+        headers['Content-Type'] = 'application/json'
+        headers['Accept'] = 'application/json'
+
+        body = {"fields": fields}
+        if collection_id:
+            body["collection_id"] = collection_id
+
+        return requests.put(
+            url,
+            json=body,
+            headers=headers
+        )
+
     def update_offsets(self, offset):
         #@TODO: This needs implementation.  Offset needs to live on a master file which has no direct API.
         #@TODO: This throws a 500 -- investigate
@@ -396,6 +506,24 @@ class AvalonSupplementalFile(AvalonBase):
         response = self.get_file(identifier)
         with open("example_file.json", "w") as my_file:
             json.dump(response, my_file, indent=4)
+
+    def delete_file(self, identifier):
+        """
+        Delete one supplemental file from this master file.
+
+        Documented as ``DELETE /master_files/#{fedora_id}/supplemental_files/#{id}``
+        with no JSON body in the response, so the caller gets the response back
+        and should judge success on the status code. The docs show no .json
+        suffix even though the sibling GET and PUT use one; if the bare path is
+        not routed, retry with it.
+        """
+        self.require_key()
+        url = f"{self.base}/master_files/{self.fedora_id}/supplemental_files/{identifier}"
+
+        response = requests.delete(url, headers=self.headers)
+        if response.status_code == 404:
+            response = requests.delete(f"{url}.json", headers=self.headers)
+        return response
 
     def add_suppl_filename(self, identifier, filename, metadata=None):
         url = f"{self.base}/master_files/{self.fedora_id}/supplemental_files/{identifier}.json"

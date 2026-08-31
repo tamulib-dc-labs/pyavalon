@@ -1,12 +1,28 @@
 import click
 from pyavalon import AvalonCollection, AvalonSupplementalFile, AvalonMediaObject, AvalonMasterFile
+from pyavalon.avalon.avalon import MissingApiKey
+from pyavalon.avalon.metadata import replace_metadata as run_replace_metadata, MetadataCsvError
+from pyavalon.avalon.supplementals import (
+    delete_supplemental_files as run_delete_supplemental_files,
+    SupplementalCsvError,
+)
 from pprint import pprint
 from csv import DictWriter, DictReader
 import os
 import subprocess
 import json
 
-@click.group()
+class _Cli(click.Group):
+    """Report a missing API key as a plain error rather than a traceback."""
+
+    def invoke(self, ctx):
+        try:
+            return super().invoke(ctx)
+        except MissingApiKey as error:
+            raise click.ClickException(str(error))
+
+
+@click.group(cls=_Cli)
 def cli() -> None:
     pass
 
@@ -218,6 +234,92 @@ def create_ami_set(collection, instance, output_csv, ismemberof):
     current_collection = AvalonCollection(collection, prod_or_pre=instance)
     current_collection.create_ami_set(output_csv=output_csv, ismemberof=ismemberof)
     print(f"Wrote AMI set to {output_csv}")
+
+
+@cli.command(
+    "replace_metadata", help="Replace metadata on many works at once from a CSV"
+)
+@click.option(
+    "--csv",
+    "-c",
+    help="The path to your CSV of replacement values",
+)
+@click.option(
+    "--instance",
+    "-i",
+    help="The Avalon Instance you want",
+    default="pre"
+)
+@click.option(
+    "--output_csv",
+    "-o",
+    help="The Path to Where to Write Your Report",
+    default="metadata_replacement_report.csv"
+)
+@click.option(
+    "--dry_run",
+    is_flag=True,
+    help="Report what would change without writing anything to Avalon."
+)
+def replace_metadata(csv, instance, output_csv, dry_run):
+    """CSV needs a "work id" column plus one column per value being set."""
+    try:
+        records = run_replace_metadata(
+            csv,
+            instance=instance,
+            dry_run=dry_run,
+            report_path=output_csv,
+        )
+    except MetadataCsvError as error:
+        raise click.ClickException(str(error))
+    changed = sum(1 for record in records if record["changed"] == "yes")
+    print(f"{'Would change' if dry_run else 'Changed'} {changed} value(s) across {len({r['work id'] for r in records})} work(s)")
+
+
+@cli.command(
+    "delete_supplemental_files",
+    help="Delete all supplemental files of a given type from the files in a CSV"
+)
+@click.option(
+    "--csv",
+    "-c",
+    help="The path to your CSV of work ids and types",
+)
+@click.option(
+    "--instance",
+    "-i",
+    help="The Avalon Instance you want",
+    default="pre"
+)
+@click.option(
+    "--output_csv",
+    "-o",
+    help="The Path to Where to Write Your Report",
+    default="supplemental_deletion_report.csv"
+)
+@click.option(
+    "--dry_run",
+    is_flag=True,
+    help="Report what would be deleted without deleting anything."
+)
+def delete_supplemental_files(csv, instance, output_csv, dry_run):
+    """CSV needs a "work id" column and a "type" column (caption, transcript, or generic)."""
+    try:
+        records = run_delete_supplemental_files(
+            csv,
+            instance=instance,
+            dry_run=dry_run,
+            report_path=output_csv,
+        )
+    except SupplementalCsvError as error:
+        raise click.ClickException(str(error))
+    matched = [record for record in records if record["supplemental id"] != ""]
+    verb = "Would delete" if dry_run else "Deleted"
+    # Name the types actually matched -- a label can say "Transcript" on a file
+    # whose type is generic, so the count alone is easy to misread.
+    kinds = "/".join(sorted({record["type"] for record in matched})) or "matching"
+    print(f"{verb} {len(matched)} {kinds} file(s) across "
+          f"{len({r['work id'] for r in records})} work(s)")
 
 
 @cli.command(

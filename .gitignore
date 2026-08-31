@@ -1,1 +1,45 @@
+# Python
 **/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Credentials -- never commit these
+.env
+.env.local
+
+# Reports the commands write, and the ad-hoc CSVs you feed them, which both
+# land in whatever directory you run from. Only the repo root is ignored --
+# the CSVs under fixtures/ are test data and stay tracked.
+/*.csv
+output.json
+collection.json
+example.json
+example_file.json
+media_object.json
+sci-fi-radio.json
+
+# Downloaded derivatives (get_file_ids_from_a_collection --download, download_best_files)
+tmp/
+*.mp3
+*.mp4
+
+# Captions and transcripts pulled down from Avalon, and any backups made before
+# a destructive run. The three under fixtures/ are test data and must stay.
+*.vtt
+!fixtures/*.vtt
+*.srt
+*.bak
+*.orig
+
+# Editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
